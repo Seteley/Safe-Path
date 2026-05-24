@@ -1,0 +1,10 @@
+UMBRAL_ACELERACION = 15.0   # m/s²
+TIEMPO_VERIFICACION = 10    # segundos
+DURACION_ALERTA = 30        # segundos
+HOST = "0.0.0.0"
+PORT = 5000
+USUARIA = "Ana Flores"
+CONTACTO = "María Flores (mamá)"
+UBICACION_LAT = -12.0833    # Jesús María, Lima
+UBICACION_LON = -77.0500
+DIRECCION = "Av. La Marina 1200, Jesús María"

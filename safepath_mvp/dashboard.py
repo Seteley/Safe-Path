@@ -1,8 +1,8 @@
 import streamlit as st
 import json, time, folium, requests, os
 from datetime import datetime, timezone
-from streamlit_folium import st_folium
 from config import *
+from schema import ESTADO_INICIAL, COLOR_NORMAL, COLOR_VERIFICANDO, COLOR_ALERTA, COLOR_RESUELTO
 
 
 st.set_page_config(
@@ -17,28 +17,15 @@ def load_state():
         with open("state.json", encoding="utf-8") as f:
             return json.load(f)
     except:
-        return {
-            "estado": "NORMAL",
-            "aceleracion_actual": 0,
-            "countdown_restante": 0,
-            "timestamp_cambio": "",
-            "timestamp_inicio_verificando": None,
-            "historial": [],
-            "usuaria": USUARIA,
-            "contacto": CONTACTO,
-            "lat": UBICACION_LAT,
-            "lon": UBICACION_LON,
-            "direccion": DIRECCION,
-            "umbral": UMBRAL_ACELERACION,
-        }
+        return dict(ESTADO_INICIAL)
 
 
-# ── Paleta SafeCorp (spec D2 RF-D02) ─────────────────────────────
+# ── Paleta SafeCorp (desde schema.py) ──────────────────────────
 COLORES = {
-    "NORMAL":      "#22c55e",
-    "VERIFICANDO": "#eab308",
-    "ALERTA":      "#ef4444",
-    "RESUELTO":    "#6b7280",
+    "NORMAL":      COLOR_NORMAL,
+    "VERIFICANDO": COLOR_VERIFICANDO,
+    "ALERTA":      COLOR_ALERTA,
+    "RESUELTO":    COLOR_RESUELTO,
 }
 
 EMOJIS = {
@@ -215,24 +202,25 @@ def render():
 
     # ── Columna derecha ────────────────────────────────────────
     with col2:
-        # Mapa: solo reconstruir si cambió estado o posición (RD01)
+        # Mapa: pre-renderizar HTML solo al cambiar estado o moverme (RD01)
+        gps_cambio = (
+            abs(gps_lat - (st.session_state.ultimo_lat or gps_lat)) > UMBRAL_MOVIMIENTO_GPS
+            or abs(gps_lon - (st.session_state.ultimo_lon or gps_lon)) > UMBRAL_MOVIMIENTO_GPS
+        )
         mapa_reconstruir = (
             st.session_state.ultimo_estado != estado
-            or st.session_state.ultimo_lat != gps_lat
-            or st.session_state.ultimo_lon != gps_lon
+            or gps_cambio
         )
 
         if mapa_reconstruir:
             m = construir_mapa(gps_lat, gps_lon, estado, usuaria, direccion_ref, gps_activo)
-            st.session_state.mapa_html = m
+            st.session_state.mapa_html = m._repr_html_()
             st.session_state.ultimo_estado = estado
             st.session_state.ultimo_lat = gps_lat
             st.session_state.ultimo_lon = gps_lon
-        else:
-            m = st.session_state.mapa_html
 
-        if m is not None:
-            st_folium(m, height=320, use_container_width=True)
+        if st.session_state.mapa_html is not None:
+            st.components.v1.html(st.session_state.mapa_html, height=330)
 
         # Historial (RF-D14)
         st.markdown("**Historial de eventos**")

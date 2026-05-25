@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import json, time, math, threading, socket
 from config import *
 from logic import StateMachine
+from schema import ESTADOS_VALIDOS
 
 app = Flask(__name__)
 machine = StateMachine()
@@ -212,10 +213,9 @@ def cancel_alert():
 @app.route('/trigger', methods=['GET'])
 def trigger_state():
     estado = request.args.get("estado", "").upper()
-    estados = {"NORMAL", "VERIFICANDO", "ALERTA", "RESUELTO"}
-    if estado not in estados:
+    if estado not in ESTADOS_VALIDOS:
         return jsonify({"status": "error",
-                        "msg": f"estado invalido. Usar: {', '.join(sorted(estados))}"}), 400
+                        "msg": f"estado invalido. Usar: {', '.join(sorted(ESTADOS_VALIDOS))}"}), 400
     machine.force_state(estado)
     return jsonify({"status": "ok", "estado": machine.state})
 

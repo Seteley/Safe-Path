@@ -8,3 +8,4 @@ CONTACTO = "María Flores (mamá)"
 UBICACION_LAT = -12.0833    # Jesús María, Lima
 UBICACION_LON = -77.0500
 DIRECCION = "Av. La Marina 1200, Jesús María"
+UMBRAL_MOVIMIENTO_GPS = 0.00004  # grados (~4m) para ignorar ruido del sensor

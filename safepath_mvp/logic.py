@@ -1,6 +1,7 @@
 import json, time, threading, os
 from datetime import datetime, timezone
 from config import *
+from schema import ESTADOS_VALIDOS
 
 
 def ahora():
@@ -42,8 +43,7 @@ class StateMachine:
             self._save()
 
     def force_state(self, estado):
-        estados_validos = {"NORMAL", "VERIFICANDO", "ALERTA", "RESUELTO"}
-        if estado not in estados_validos:
+        if estado not in ESTADOS_VALIDOS:
             return False
         self._cancelar_timer()
         if estado == self.state:

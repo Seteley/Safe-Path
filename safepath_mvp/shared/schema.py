@@ -6,7 +6,7 @@ y estados válidos que comparten logic.py (backend) y dashboard.py (frontend).
 
 Importar desde aquí en lugar de hardcodear strings en cada archivo.
 """
-from config import *
+from ..simulador.config import *
 
 # ── Estados válidos de la máquina ──────────────────────────────
 ESTADOS_VALIDOS = {"NORMAL", "VERIFICANDO", "ALERTA", "RESUELTO"}

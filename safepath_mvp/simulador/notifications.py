@@ -1,20 +1,25 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from config import SMTP_EMAIL, SMTP_PASSWORD, SMTP_SERVER, SMTP_PORT, CONTACTO_EMAIL
+from typing import Any
+from .config import SMTP_SERVER, SMTP_PORT
+from .settings import settings
+from ..shared.utils import setup_logging
+
+logger = setup_logging("safepath.notifications")
 
 
-def enviar_alerta_email(estado):
+def enviar_alerta_email(estado: dict[str, Any]) -> bool:
     """Envia notificacion de alerta al contacto via email SMTP."""
-    if not all([SMTP_EMAIL, SMTP_PASSWORD, CONTACTO_EMAIL]):
-        print("[EMAIL] Configuracion incompleta — omitiendo notificacion")
+    if not settings.email_configured:
+        logger.info("Configuracion incompleta - omitiendo notificacion")
         return False
 
     if estado.get("estado") != "ALERTA":
         return False
 
     asunto = f"[ALERTA SAFE-PATH] {estado.get('usuaria', 'Usuaria')} necesita ayuda"
-    cuerpo = f"""ALERTA DE EMERGENCIA — SAFE-PATH
+    cuerpo = f"""ALERTA DE EMERGENCIA - SAFE-PATH
 =====================================
 
 {estado.get('usuaria', 'Usuaria')} activo una alerta de seguridad.
@@ -32,19 +37,19 @@ Contacto de emergencia: {estado.get('contacto', 'N/A')}
 """
 
     msg = MIMEMultipart()
-    msg["From"] = SMTP_EMAIL
-    msg["To"] = CONTACTO_EMAIL
+    msg["From"] = settings.SMTP_EMAIL
+    msg["To"] = settings.CONTACTO_EMAIL
     msg["Subject"] = asunto
     msg.attach(MIMEText(cuerpo, "plain", "utf-8"))
 
     try:
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.login(settings.SMTP_EMAIL, settings.SMTP_PASSWORD)
             server.send_message(msg)
-        print(f"[EMAIL] Notificacion enviada a {CONTACTO_EMAIL}")
+        logger.info("Notificacion enviada a %s", settings.CONTACTO_EMAIL)
         return True
     except smtplib.SMTPAuthenticationError:
-        print("[EMAIL] Error: credenciales invalidas. Verificar SAFEPATH_SMTP_PASSWORD en .env")
+        logger.error("Credenciales invalidas. Verificar SAFEPATH_SMTP_PASSWORD en .env")
     except Exception as e:
-        print(f"[EMAIL] Error al enviar: {e}")
+        logger.error("Error al enviar email: %s", e)
     return False

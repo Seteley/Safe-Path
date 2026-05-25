@@ -1,0 +1,5 @@
+flask>=2.0
+streamlit>=1.30
+folium>=0.14
+requests>=2.25
+python-dotenv>=1.0

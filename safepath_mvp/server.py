@@ -19,11 +19,9 @@ def get_local_ip():
 
 
 def buscar_aceleracion_en_dict(d, profundidad=0):
-    """Busca recursivamente valores ax/ay/az o x/y/z en un dict."""
     if profundidad > 5 or d is None:
         return None
 
-    # Patrones de nombres de campos
     patrones = [
         ('ax', 'ay', 'az'),
         ('x', 'y', 'z'),
@@ -42,7 +40,6 @@ def buscar_aceleracion_en_dict(d, profundidad=0):
             except (ValueError, TypeError):
                 pass
 
-    # Buscar en sub-objetos
     for k, v in d.items():
         if isinstance(v, dict):
             result = buscar_aceleracion_en_dict(v, profundidad + 1)
@@ -53,30 +50,22 @@ def buscar_aceleracion_en_dict(d, profundidad=0):
 
 
 def extraer_aceleracion(data):
-    """Intenta extraer aceleración de cualquier estructura JSON."""
     if data is None:
         return None
 
-    # 1. Array de lecturas (Sensor Logger manda batches)
     if isinstance(data, list) and len(data) > 0:
-        # Tomar la última lectura del batch
         for item in reversed(data):
             if isinstance(item, dict):
                 result = buscar_aceleracion_en_dict(item)
                 if result:
                     return result
-            elif isinstance(item, (int, float)):
-                pass
         return None
 
-    # 2. Objeto con payload anidado (formato común de Sensor Logger)
     if isinstance(data, dict):
-        # Probar primero en el nivel raíz
         result = buscar_aceleracion_en_dict(data)
         if result:
             return result
 
-        # Buscar en 'payload' o 'data'
         for k in ('payload', 'data', 'records', 'measurements', 'sensorData'):
             if k in data:
                 sub = data[k]
@@ -95,7 +84,6 @@ def extraer_aceleracion(data):
 
 
 def buscar_gps_en_dict(d, profundidad=0):
-    """Busca recursivamente latitud/longitud en un dict."""
     if profundidad > 5 or d is None:
         return None
 
@@ -129,7 +117,6 @@ def buscar_gps_en_dict(d, profundidad=0):
 
 
 def extraer_gps(data):
-    """Intenta extraer coordenadas GPS de cualquier estructura JSON."""
     if data is None:
         return None
 
@@ -163,16 +150,18 @@ def extraer_gps(data):
     return None
 
 
-@app.route('/sensor', methods=['POST'])
-def receive_sensor():
+# ── Endpoints principales (spec D1) ──────────────────────────────
+
+@app.route('/data', methods=['POST'])
+def receive_data():
     try:
         raw = request.get_data(as_text=True)
         print(f"\n[->] POST recibido ({len(raw)} bytes): {raw[:500]}")
 
         data = request.json
         if data is None:
-            print("[!] JSON inválido o vacío")
-            return jsonify({"status": "error", "msg": "JSON inválido"}), 400
+            print("[!] JSON invalido o vacio")
+            return jsonify({"status": "error", "msg": "JSON invalido"}), 400
 
         resultado = extraer_aceleracion(data)
         if resultado is None:
@@ -182,7 +171,7 @@ def receive_sensor():
                 claves = f"list[{len(data)} items]"
             else:
                 claves = str(type(data).__name__)
-            print(f"[!] No se encontraron campos de aceleración. Tipo: {type(data).__name__}, Info: {claves}")
+            print(f"[!] No se encontraron campos de aceleracion. Tipo: {type(data).__name__}, Info: {claves}")
             return jsonify({"status": "error", "msg": "campos no reconocidos",
                             "received_type": type(data).__name__}), 400
 
@@ -203,21 +192,50 @@ def receive_sensor():
         machine.update(net_acceleration)
         return jsonify({"status": "ok", "accel": round(net_acceleration, 2)})
     except Exception as e:
-        print(f"[!!!] ERROR en /sensor: {e}")
+        print(f"[!!!] ERROR en /data: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 
-@app.route('/cancel', methods=['POST'])
+@app.route('/status', methods=['GET'])
+def get_status():
+    return jsonify(machine.get_state())
+
+
+@app.route('/cancel', methods=['GET', 'POST'])
 def cancel_alert():
     machine.cancel()
-    return jsonify({"status": "cancelled"})
+    return jsonify({"status": "cancelado"})
+
+
+@app.route('/trigger', methods=['GET'])
+def trigger_state():
+    estado = request.args.get("estado", "").upper()
+    estados = {"NORMAL", "VERIFICANDO", "ALERTA", "RESUELTO"}
+    if estado not in estados:
+        return jsonify({"status": "error",
+                        "msg": f"estado invalido. Usar: {', '.join(sorted(estados))}"}), 400
+    machine.force_state(estado)
+    return jsonify({"status": "ok", "estado": machine.state})
+
+
+@app.route('/reset', methods=['GET'])
+def reset_state():
+    machine.reset()
+    return jsonify({"status": "reseteado", "estado": machine.state})
+
+
+# ── Alias (compatibilidad con versiones anteriores) ──────────────
+
+@app.route('/sensor', methods=['POST'])
+def receive_sensor():
+    return receive_data()
 
 
 @app.route('/state', methods=['GET'])
 def get_state():
-    return jsonify(machine.get_state())
+    return get_status()
 
 
 @app.route('/ping', methods=['GET'])
@@ -225,20 +243,18 @@ def ping():
     return jsonify({"status": "alive", "state": machine.state})
 
 
-@app.route('/debug/trigger', methods=['GET'])
-def debug_trigger():
-    machine.update(20.0)
-    return jsonify(machine.get_state())
-
+# ── Startup ──────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     local_ip = get_local_ip()
     print("=" * 55)
-    print("  SAFE-PATH SERVER")
-    print(f"  IP local detectada: {local_ip}")
-    print(f"  Sensor endpoint:  http://{local_ip}:{PORT}/sensor")
-    print(f"  Debug trigger:    http://{local_ip}:{PORT}/debug/trigger")
-    print(f"  Cancel endpoint:  http://{local_ip}:{PORT}/cancel")
-    print(f"  Ping:             http://{local_ip}:{PORT}/ping")
+    print("  SAFE-PATH SERVER (D1 - Simulador de Pulsera)")
+    print(f"  IP detectada: {local_ip}")
+    print(f"  POST /data       <- Sensor Logger (acelerometro)")
+    print(f"  GET  /status     <- Estado completo")
+    print(f"  GET  /cancel     <- Cancelar verificacion")
+    print(f"  GET  /trigger?estado=X  <- Forzar estado (Plan B)")
+    print(f"  GET  /reset      <- Reiniciar para nueva demo")
+    print(f"  GET  /ping       <- Health check")
     print("=" * 55)
     app.run(host=HOST, port=PORT)

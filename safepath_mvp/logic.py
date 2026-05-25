@@ -1,5 +1,11 @@
-import json, time, threading
+import json, time, threading, os
+from datetime import datetime, timezone
 from config import *
+
+
+def ahora():
+    return datetime.now(timezone.utc).isoformat()
+
 
 class StateMachine:
     def __init__(self):
@@ -12,6 +18,8 @@ class StateMachine:
         self.lat = UBICACION_LAT
         self.lon = UBICACION_LON
         self.gps_activo = False
+        self.timestamp_cambio = ahora()
+        self.timestamp_inicio_verificando = None
         self._save()
 
     def update(self, accel):
@@ -28,19 +36,66 @@ class StateMachine:
 
     def cancel(self):
         if self.state == "VERIFICANDO":
-            if self.timer:
-                self.timer.cancel()
-            self._add_historial("Alerta cancelada manualmente")
+            self._cancelar_timer()
+            self._add_historial("NORMAL", self.accel_actual, cancelado=True)
             self._transition("NORMAL")
             self._save()
 
+    def force_state(self, estado):
+        estados_validos = {"NORMAL", "VERIFICANDO", "ALERTA", "RESUELTO"}
+        if estado not in estados_validos:
+            return False
+        self._cancelar_timer()
+        if estado == self.state:
+            self._add_historial(estado, self.accel_actual, forzado=True)
+        else:
+            self._add_historial(estado, self.accel_actual, forzado=True)
+        self.state = estado
+        self.timestamp_cambio = ahora()
+        if estado == "VERIFICANDO":
+            self.timestamp_inicio_verificando = ahora()
+            self.countdown = TIEMPO_VERIFICACION
+            self.timer = threading.Timer(
+                TIEMPO_VERIFICACION, self._escalar
+            )
+            self.timer.start()
+            threading.Thread(target=self._update_countdown, daemon=True).start()
+        else:
+            self.countdown = 0
+            self.timestamp_inicio_verificando = None
+            if estado == "ALERTA":
+                threading.Timer(DURACION_ALERTA, self._resolver).start()
+            elif estado == "RESUELTO":
+                threading.Timer(5, self._volver_normal).start()
+        self._save()
+        return True
+
+    def reset(self):
+        self._cancelar_timer()
+        self.state = "NORMAL"
+        self.accel_actual = 0.0
+        self.countdown = 0
+        self.timestamp_cambio = ahora()
+        self.timestamp_inicio_verificando = None
+        self.historial = []
+        self.timer = None
+        self._save()
+
+    def _cancelar_timer(self):
+        if self.timer:
+            self.timer.cancel()
+            self.timer = None
+
     def _transition(self, new_state):
         self.state = new_state
+        self.timestamp_cambio = ahora()
         self.evento_inicio = time.time()
-        self._add_historial(f"Estado → {new_state}")
+        self._add_historial(new_state, self.accel_actual)
 
         if new_state == "VERIFICANDO":
+            self.timestamp_inicio_verificando = ahora()
             self.countdown = TIEMPO_VERIFICACION
+            self._cancelar_timer()
             self.timer = threading.Timer(
                 TIEMPO_VERIFICACION, self._escalar
             )
@@ -48,6 +103,7 @@ class StateMachine:
             threading.Thread(target=self._update_countdown, daemon=True).start()
         elif new_state == "NORMAL":
             self.countdown = 0
+            self.timestamp_inicio_verificando = None
 
     def _update_countdown(self):
         for i in range(TIEMPO_VERIFICACION, 0, -1):
@@ -59,41 +115,62 @@ class StateMachine:
 
     def _escalar(self):
         if self.state == "VERIFICANDO":
-            self._add_historial("⚠️ ALERTA ESCALADA — sin respuesta")
+            self._add_historial("ALERTA", self.accel_actual, escalado=True)
             self.state = "ALERTA"
+            self.timestamp_cambio = ahora()
             self._save()
             threading.Timer(DURACION_ALERTA, self._resolver).start()
 
     def _resolver(self):
         if self.state == "ALERTA":
-            self._add_historial("✅ Evento resuelto")
+            self._add_historial("RESUELTO", self.accel_actual)
             self.state = "RESUELTO"
+            self.timestamp_cambio = ahora()
             self._save()
             threading.Timer(5, self._volver_normal).start()
 
     def _volver_normal(self):
         self.state = "NORMAL"
         self.countdown = 0
+        self.timestamp_cambio = ahora()
+        self.timestamp_inicio_verificando = None
         self._save()
 
-    def _add_historial(self, msg):
-        ts = time.strftime("%H:%M:%S")
-        self.historial.append(f"{ts}  {msg}")
-        if len(self.historial) > 8:
-            self.historial = self.historial[-8:]
+    def _add_historial(self, estado, aceleracion, cancelado=False, escalado=False, forzado=False):
+        entrada = {
+            "estado": estado,
+            "timestamp": ahora(),
+            "aceleracion": aceleracion,
+        }
+        if cancelado:
+            entrada["estado"] = "NORMAL"
+            entrada["cancelado"] = True
+        if escalado:
+            entrada["escalado"] = True
+        if forzado:
+            entrada["forzado"] = True
+        self.historial.append(entrada)
+        if len(self.historial) > 10:
+            self.historial = self.historial[-10:]
 
     def get_state(self):
         return {
-            "state": self.state,
-            "accel": self.accel_actual,
-            "countdown": self.countdown,
+            "estado": self.state,
+            "aceleracion_actual": self.accel_actual,
+            "countdown_restante": self.countdown,
+            "timestamp_cambio": self.timestamp_cambio,
+            "timestamp_inicio_verificando": self.timestamp_inicio_verificando,
             "historial": self.historial,
-            "umbral": UMBRAL_ACELERACION,
+            "usuaria": USUARIA,
+            "contacto": CONTACTO,
             "lat": self.lat,
             "lon": self.lon,
-            "gps_activo": self.gps_activo,
+            "direccion": DIRECCION,
+            "umbral": UMBRAL_ACELERACION,
         }
 
     def _save(self):
-        with open("state.json", "w") as f:
-            json.dump(self.get_state(), f)
+        tmp = "state_tmp.json"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(self.get_state(), f, ensure_ascii=False)
+        os.replace(tmp, "state.json")

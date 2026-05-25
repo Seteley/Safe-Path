@@ -172,6 +172,7 @@ flask               Servidor HTTP local
 streamlit           Dashboard interactivo
 folium              Mapa interactivo (renderizado de HTML)
 requests            Cliente HTTP (para el botón cancelar del dashboard)
+python-dotenv       Carga variables de entorno desde archivo .env
 ```
 
 Ya no se requiere `streamlit-folium`: el mapa se renderiza como HTML estático con `st.components.v1.html()`.
@@ -194,7 +195,7 @@ venv\Scripts\Activate.ps1
 source venv/bin/activate
 
 # 4. Instalar dependencias
-pip install flask streamlit folium requests
+pip install flask streamlit folium requests python-dotenv
 ```
 
 ---
@@ -327,6 +328,49 @@ UMBRAL_MOVIMIENTO_GPS = 0.00004  # grados (~4m) para ignorar ruido del sensor GP
 
 - **`UMBRAL_ACELERACION` (15 m/s²):** Caminar normal (2-4 m/s²) no activa. Una sacudida intencional (20-30 m/s²) sí.
 - **`UMBRAL_MOVIMIENTO_GPS` (0.00004° ≈ 4m):** Ignora el ruido del GPS del celular. Solo reconstruye el mapa cuando la persona realmente se movió. Reducir a `0.00002` (~2m) si el GPS es muy preciso, o subir a `0.0001` (~11m) si fluctúa mucho.
+
+---
+
+## Notificaciones por Email
+
+Cuando el sistema escala a ALERTA, envía automáticamente un email al contacto
+de confianza con la ubicación GPS, aceleración detectada y hora del evento.
+
+### Setup (2 minutos)
+
+1. Crear una cuenta Gmail para el proyecto (ej: `safepath.demo@gmail.com`)
+2. Activar verificación en 2 pasos en https://myaccount.google.com/security
+3. Generar App Password en https://myaccount.google.com/apppasswords
+   - Nombre: "SafePath"
+   - Copiar el código de 16 caracteres (sin espacios)
+4. Copiar `.env.example` a `.env` y completar:
+   ```
+   SAFEPATH_SMTP_PASSWORD=abcdefghijklmnop
+   SAFEPATH_CONTACTO_EMAIL=maria.flores@gmail.com
+   ```
+5. Instalar `python-dotenv`: `pip install python-dotenv`
+
+### Cómo funciona
+
+- Al transicionar a ALERTA (por escalamiento automático o `/trigger`), el sistema lanza un hilo en segundo plano que envía el email
+- El envío no bloquea la máquina de estados — si Gmail tarda 5 segundos, el sistema sigue funcionando
+- Si falta configuración (`.env` incompleto), imprime `[EMAIL] Configuracion incompleta` y sigue normalmente
+- La notificación se envía solo una vez por transición a ALERTA, no en cada ciclo
+
+### Cómo probar
+
+```
+# Forzar alerta (dispara la notificación)
+curl http://localhost:5000/trigger?estado=ALERTA
+
+# Consola debe mostrar: [EMAIL] Notificacion enviada a maria.flores@gmail.com
+```
+
+### Nota para la demo
+
+Mantener la app de Gmail abierta en el celular del contacto con sonido activado
+para que la notificación push sea visible instantáneamente. El email puede tardar
+2-8 segundos en llegar según latencia de red.
 
 ---
 

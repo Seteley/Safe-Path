@@ -64,6 +64,7 @@ class StateMachine:
             self.countdown = 0
             self.timestamp_inicio_verificando = None
             if estado == "ALERTA":
+                self._notificar_alerta()
                 threading.Timer(DURACION_ALERTA, self._resolver).start()
             elif estado == "RESUELTO":
                 threading.Timer(5, self._volver_normal).start()
@@ -119,6 +120,7 @@ class StateMachine:
             self.state = "ALERTA"
             self.timestamp_cambio = ahora()
             self._save()
+            self._notificar_alerta()
             threading.Timer(DURACION_ALERTA, self._resolver).start()
 
     def _resolver(self):
@@ -174,3 +176,15 @@ class StateMachine:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(self.get_state(), f, ensure_ascii=False)
         os.replace(tmp, "state.json")
+
+    def _notificar_alerta(self):
+        """Envia notificacion al contacto de confianza en un hilo aparte."""
+        try:
+            from notifications import enviar_alerta_email
+            threading.Thread(
+                target=enviar_alerta_email,
+                args=(self.get_state(),),
+                daemon=True
+            ).start()
+        except ImportError:
+            print("[!] Modulo notifications.py no encontrado")

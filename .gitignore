@@ -2,7 +2,27 @@
 .env
 state.json
 safepath_mvp/state_tmp.json
-safepath_mvp/__pycache__/
-venv/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

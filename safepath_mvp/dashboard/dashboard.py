@@ -4,22 +4,28 @@ Lee state.json cada segundo y renderiza el estado del sistema
 en tiempo real con mapa, indicadores y flujo visual.
 """
 
-import streamlit as st
 import json
 import time
-from .components import (
-    COLORES,
-    EMOJIS,
-    render_header,
-    render_estado,
+
+import streamlit as st
+
+from safepath_mvp.dashboard.components import (
     render_aceleracion,
-    render_flujo,
     render_countdown,
-    render_mapa,
+    render_estado,
+    render_flujo,
+    render_header,
     render_historial,
+    render_mapa,
 )
-from ..simulador.config import USUARIA, CONTACTO, UBICACION_LAT, UBICACION_LON, DIRECCION, UMBRAL_ACELERACION
-from ..shared.schema import ESTADO_INICIAL
+from safepath_mvp.shared.schema import ESTADO_INICIAL
+from safepath_mvp.simulador.config import (
+    CONTACTO,
+    UBICACION_LAT,
+    UBICACION_LON,
+    UMBRAL_ACELERACION,
+    USUARIA,
+)
 
 st.set_page_config(
     page_title="SAFE-PATH - Panel de seguridad",
@@ -53,8 +59,6 @@ def render() -> None:
     """Orquestador principal: carga estado y renderiza todos los componentes."""
     data = load_state()
     estado = data.get("estado", "NORMAL")
-    color = COLORES.get(estado, "#888")
-    emoji = EMOJIS.get(estado, "\u26aa")
     usuaria = data.get("usuaria", USUARIA)
     contacto = data.get("contacto", CONTACTO)
 
@@ -70,7 +74,7 @@ def render() -> None:
     gps_texto = (
         f"\U0001f4cd GPS: {gps_lat:.6f}, {gps_lon:.6f}"
         if gps_activo
-        else f"\U0001f4cd GPS: usando ubicacion de referencia"
+        else "\U0001f4cd GPS: usando ubicacion de referencia"
     )
 
     with col1:

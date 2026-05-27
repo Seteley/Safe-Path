@@ -272,10 +272,10 @@ class StateMachine:
     def _notificar_alerta(self) -> None:
         """Envia notificacion al contacto de confianza en un hilo aparte."""
         try:
-            from .notifications import enviar_alerta_email
+            from .notifications import enviar_alerta_sms
 
             threading.Thread(
-                target=enviar_alerta_email,
+                target=enviar_alerta_sms,
                 args=(self.get_state(),),
                 daemon=True,
             ).start()

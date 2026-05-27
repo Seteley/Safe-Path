@@ -1,8 +1,11 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+"""Notificaciones SMS via Twilio para alertas SAFE-PATH.
+
+Requiere configurar las variables de entorno en .env (ver .env.example).
+La funcion se llama desde logic.py en un hilo daemon para no bloquear
+la maquina de estados.
+"""
+
 from typing import Any
-from .config import SMTP_SERVER, SMTP_PORT
 from .settings import settings
 from ..shared.utils import setup_logging
 
@@ -15,64 +18,59 @@ def _determinar_tipo_activacion(estado: dict[str, Any]) -> str:
     if historial:
         ultimo = historial[-1]
         if ultimo.get("forzado"):
-            return "Manual (forzado por operador desde el dashboard)"
+            return "Manual (operador)"
         if ultimo.get("escalado"):
-            return "Automatica (temporizador de verificacion expirado)"
-    return "Automatica (temporizador de verificacion expirado)"
+            return "Automatica (temporizador)"
+    return "Automatica (temporizador)"
 
 
-def enviar_alerta_email(estado: dict[str, Any]) -> bool:
-    """Envia notificacion de alerta al contacto via email SMTP."""
-    if not settings.email_configured:
-        logger.info("Configuracion incompleta - omitiendo notificacion")
+def enviar_alerta_sms(estado: dict[str, Any]) -> bool:
+    """Envia SMS de alerta al contacto de confianza via Twilio.
+
+    El mensaje incluye: nombre de usuaria, ubicacion GPS, enlace de mapa,
+    hora del evento y tipo de activacion (automatica o manual).
+
+    Returns:
+        True si el SMS fue enviado exitosamente, False en caso contrario.
+    """
+    if not settings.sms_configured:
+        logger.info("Credenciales Twilio no configuradas - omitiendo SMS")
         return False
 
     if estado.get("estado") != "ALERTA":
         return False
 
-    lat = estado.get("lat", "?")
-    lon = estado.get("lon", "?")
+    lat = estado.get("lat", "")
+    lon = estado.get("lon", "")
     enlace_mapa = (
         f"https://maps.google.com/?q={lat},{lon}"
-        if lat != "?" and lon != "?"
-        else "Coordenadas no disponibles"
+        if lat and lon
+        else "ubicacion no disponible"
     )
     tipo_activacion = _determinar_tipo_activacion(estado)
+    hora = estado.get("timestamp_cambio", "")[:19].replace("T", " ")
 
-    asunto = f"[ALERTA SAFE-PATH] {estado.get('usuaria', 'Usuaria')} necesita ayuda"
-    cuerpo = f"""ALERTA DE EMERGENCIA - SAFE-PATH
-=====================================
-
-{estado.get('usuaria', 'Usuaria')} activo una alerta de seguridad.
-
-El sistema detecto una aceleracion anomala de {estado.get('aceleracion_actual', 0)} m/s2
-y la usuaria no cancelo la verificacion a tiempo.
-
-Ubicacion GPS: {lat}, {lon}
-Ver en mapa:   {enlace_mapa}
-Direccion de referencia: {estado.get('direccion', 'No disponible')}
-Hora del evento: {estado.get('timestamp_cambio', '?')[:19]}
-Tipo de activacion: {tipo_activacion}
-
----
-Enviado automaticamente por SAFE-PATH
-Contacto de emergencia: {estado.get('contacto', 'N/A')}
-"""
-
-    msg = MIMEMultipart()
-    msg["From"] = settings.SMTP_EMAIL
-    msg["To"] = settings.CONTACTO_EMAIL
-    msg["Subject"] = asunto
-    msg.attach(MIMEText(cuerpo, "plain", "utf-8"))
+    cuerpo = (
+        f"[SAFE-PATH] ALERTA DE EMERGENCIA\n"
+        f"Usuaria: {estado.get('usuaria', 'Desconocida')}\n"
+        f"Hora: {hora}\n"
+        f"Ubicacion: {enlace_mapa}\n"
+        f"Activacion: {tipo_activacion}"
+    )
 
     try:
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
-            server.login(settings.SMTP_EMAIL, settings.SMTP_PASSWORD)
-            server.send_message(msg)
-        logger.info("Notificacion enviada a %s", settings.CONTACTO_EMAIL)
+        from twilio.rest import Client
+
+        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        message = client.messages.create(
+            body=cuerpo,
+            from_=settings.TWILIO_FROM_NUMBER,
+            to=settings.TWILIO_TO_NUMBER,
+        )
+        logger.info("SMS enviado a %s (SID: %s)", settings.TWILIO_TO_NUMBER, message.sid)
         return True
-    except smtplib.SMTPAuthenticationError:
-        logger.error("Credenciales invalidas. Verificar SAFEPATH_SMTP_PASSWORD en .env")
+    except ImportError:
+        logger.error("Libreria 'twilio' no instalada. Ejecutar: pip install twilio>=8.0")
     except Exception as e:
-        logger.error("Error al enviar email: %s", e)
+        logger.error("Error al enviar SMS: %s", e)
     return False

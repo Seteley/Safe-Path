@@ -12,13 +12,19 @@ load_dotenv()
 class Settings:
     """Configuracion sensible cargada exclusivamente desde .env."""
 
-    SMTP_EMAIL: str = os.getenv("SAFEPATH_SMTP_EMAIL", "")
-    SMTP_PASSWORD: str = os.getenv("SAFEPATH_SMTP_PASSWORD", "")
-    CONTACTO_EMAIL: str = os.getenv("SAFEPATH_CONTACTO_EMAIL", "")
+    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_FROM_NUMBER: str = os.getenv("TWILIO_FROM_NUMBER", "")
+    TWILIO_TO_NUMBER: str = os.getenv("TWILIO_TO_NUMBER", "")
 
     @property
-    def email_configured(self) -> bool:
-        return all([self.SMTP_EMAIL, self.SMTP_PASSWORD, self.CONTACTO_EMAIL])
+    def sms_configured(self) -> bool:
+        return all([
+            self.TWILIO_ACCOUNT_SID,
+            self.TWILIO_AUTH_TOKEN,
+            self.TWILIO_FROM_NUMBER,
+            self.TWILIO_TO_NUMBER,
+        ])
 
 
 settings = Settings()

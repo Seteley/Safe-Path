@@ -11,6 +11,7 @@ import streamlit as st
 
 from safepath_mvp.dashboard.components import (
     render_aceleracion,
+    render_controles_demo,
     render_countdown,
     render_estado,
     render_flujo,
@@ -92,6 +93,8 @@ def render() -> None:
     with col2:
         render_mapa(data, st.session_state)
         render_historial(data)
+
+    render_controles_demo(estado)
 
     time.sleep(1)
     st.rerun()

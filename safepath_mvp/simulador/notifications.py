@@ -9,6 +9,18 @@ from ..shared.utils import setup_logging
 logger = setup_logging("safepath.notifications")
 
 
+def _determinar_tipo_activacion(estado: dict[str, Any]) -> str:
+    """Determina si la alerta fue activada automatica o manualmente."""
+    historial = estado.get("historial", [])
+    if historial:
+        ultimo = historial[-1]
+        if ultimo.get("forzado"):
+            return "Manual (forzado por operador desde el dashboard)"
+        if ultimo.get("escalado"):
+            return "Automatica (temporizador de verificacion expirado)"
+    return "Automatica (temporizador de verificacion expirado)"
+
+
 def enviar_alerta_email(estado: dict[str, Any]) -> bool:
     """Envia notificacion de alerta al contacto via email SMTP."""
     if not settings.email_configured:
@@ -17,6 +29,15 @@ def enviar_alerta_email(estado: dict[str, Any]) -> bool:
 
     if estado.get("estado") != "ALERTA":
         return False
+
+    lat = estado.get("lat", "?")
+    lon = estado.get("lon", "?")
+    enlace_mapa = (
+        f"https://maps.google.com/?q={lat},{lon}"
+        if lat != "?" and lon != "?"
+        else "Coordenadas no disponibles"
+    )
+    tipo_activacion = _determinar_tipo_activacion(estado)
 
     asunto = f"[ALERTA SAFE-PATH] {estado.get('usuaria', 'Usuaria')} necesita ayuda"
     cuerpo = f"""ALERTA DE EMERGENCIA - SAFE-PATH
@@ -27,9 +48,11 @@ def enviar_alerta_email(estado: dict[str, Any]) -> bool:
 El sistema detecto una aceleracion anomala de {estado.get('aceleracion_actual', 0)} m/s2
 y la usuaria no cancelo la verificacion a tiempo.
 
-Ubicacion GPS: {estado.get('lat', '?')}, {estado.get('lon', '?')}
+Ubicacion GPS: {lat}, {lon}
+Ver en mapa:   {enlace_mapa}
 Direccion de referencia: {estado.get('direccion', 'No disponible')}
 Hora del evento: {estado.get('timestamp_cambio', '?')[:19]}
+Tipo de activacion: {tipo_activacion}
 
 ---
 Enviado automaticamente por SAFE-PATH

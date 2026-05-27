@@ -227,6 +227,90 @@ def render_mapa(data: dict[str, Any], session_state: Any) -> None:
         st.components.v1.html(session_state.mapa_html, height=330)
 
 
+def render_controles_demo(estado: str) -> None:
+    """RF-09, RF-10: Panel de control manual para demostracion ante jurado.
+
+    Permite al operador forzar cualquier estado del sistema y reiniciarlo
+    sin necesidad de sacudir el dispositivo sensor ni reiniciar la aplicacion.
+    """
+    st.markdown("---")
+    st.markdown("**🎛️ Panel de control — Demo**")
+
+    col_v, col_a, col_r, col_n = st.columns(4)
+
+    with col_v:
+        disabled_v = estado == "VERIFICANDO"
+        if st.button(
+            "🟡 Forzar VERIFICANDO",
+            disabled=disabled_v,
+            use_container_width=True,
+            help="Simula detección de movimiento anómalo e inicia el countdown",
+        ):
+            try:
+                requests.get(
+                    "http://localhost:5000/trigger?estado=VERIFICANDO", timeout=2
+                )
+            except Exception:
+                pass
+
+    with col_a:
+        disabled_a = estado == "ALERTA"
+        if st.button(
+            "🔴 Forzar ALERTA",
+            disabled=disabled_a,
+            use_container_width=True,
+            help="Escala directamente a estado de alerta y notifica al contacto",
+        ):
+            try:
+                requests.get(
+                    "http://localhost:5000/trigger?estado=ALERTA", timeout=2
+                )
+            except Exception:
+                pass
+
+    with col_r:
+        disabled_r = estado == "RESUELTO"
+        if st.button(
+            "🔵 Forzar RESUELTO",
+            disabled=disabled_r,
+            use_container_width=True,
+            help="Marca el evento como resuelto (espera automática de 5s antes de volver a NORMAL)",
+        ):
+            try:
+                requests.get(
+                    "http://localhost:5000/trigger?estado=RESUELTO", timeout=2
+                )
+            except Exception:
+                pass
+
+    with col_n:
+        disabled_n = estado == "NORMAL"
+        if st.button(
+            "🟢 Forzar NORMAL",
+            disabled=disabled_n,
+            use_container_width=True,
+            help="Regresa al monitoreo normal sin cancelar ni notificar",
+        ):
+            try:
+                requests.get(
+                    "http://localhost:5000/trigger?estado=NORMAL", timeout=2
+                )
+            except Exception:
+                pass
+
+    st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
+    if st.button(
+        "🔄 Reiniciar sistema (limpiar historial)",
+        type="secondary",
+        use_container_width=True,
+        help="Borra el historial, cancela todos los timers y vuelve a NORMAL. Úsalo entre demostraciones.",
+    ):
+        try:
+            requests.get("http://localhost:5000/reset", timeout=2)
+        except Exception:
+            pass
+
+
 def render_historial(data: dict[str, Any]) -> None:
     """RF-D14: Lista de ultimos eventos con timestamps formateados."""
     color = COLORES.get(data.get("estado", "NORMAL"), "#888")

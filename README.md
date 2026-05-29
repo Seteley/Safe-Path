@@ -233,10 +233,13 @@ venv\Scripts\Activate.ps1
 # Mac/Linux:
 source venv/bin/activate
 
-# 4. Instalar dependencias (produccion + desarrollo)
+# 4. Instalar herramientas de build (necesario para el paso 5)
+pip install setuptools wheel
+
+# 5. Instalar dependencias (produccion + desarrollo)
 pip install -e ".[dev]"
 
-# 5. Instalar hooks de pre-commit
+# 6. Instalar hooks de pre-commit
 pre-commit install
 ```
 

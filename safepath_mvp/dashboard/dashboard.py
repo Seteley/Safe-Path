@@ -17,7 +17,6 @@ from safepath_mvp.dashboard.components import (
     render_countdown,
     render_estado,
     render_flujo,
-    render_footer,
     render_header,
     render_historial,
     render_mapa,
@@ -119,9 +118,6 @@ def render() -> None:
         render_mapa(data, st.session_state)
         render_historial(data)
         render_controles_demo(estado)
-
-    # 4. Footer full-width
-    render_footer(estado)
 
     time.sleep(1)
     st.rerun()

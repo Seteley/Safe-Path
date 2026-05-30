@@ -136,10 +136,6 @@ def render_header(estado: str) -> None:
                 background:white;color:{NAVY};
                 padding:6px 18px;border-radius:20px;
                 font-size:0.82rem;font-weight:700">Dashboard</div>
-            <div style="
-                color:#94a3b8;
-                padding:6px 18px;border-radius:20px;
-                font-size:0.82rem">Alertas</div>
           </div>
         </div>
         """,
@@ -687,12 +683,6 @@ def render_controles_demo(estado: str) -> None:
             requests.get("http://localhost:5000/reset", timeout=2)
         except Exception:
             pass
-
-    st.markdown(
-        "<div style='color:#94a3b8;font-size:0.74rem;text-align:center;"
-        "margin-top:2px;margin-bottom:4px'>Modo demo — sin conexión real</div>",
-        unsafe_allow_html=True,
-    )
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────

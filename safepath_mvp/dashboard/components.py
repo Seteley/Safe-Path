@@ -353,32 +353,28 @@ def render_countdown(data: dict[str, Any]) -> None:
 # ── Contactos de emergencia ───────────────────────────────────────────────────
 
 def render_contactos_emergencia(contacto: str) -> None:
-    """Contactos de emergencia — siempre visibles en columna izquierda."""
+    """Contactos de emergencia — solo los definidos en config.py."""
+    # Parsear "Maria Flores (mama)" → nombre, relación, iniciales
     partes = contacto.split("(")
-    nombre1 = partes[0].strip()
-    relacion1 = partes[1].rstrip(")").strip() if len(partes) > 1 else "contacto"
-    iniciales1 = "".join(p[0].upper() for p in nombre1.split()[:2])
+    nombre = partes[0].strip()
+    relacion = partes[1].rstrip(")").strip() if len(partes) > 1 else "contacto"
+    iniciales = "".join(p[0].upper() for p in nombre.split()[:2])
 
-    nombre2 = "Juan Flores"
-    relacion2 = "padre"
-    iniciales2 = "JF"
-
-    def _fila(init: str, nom: str, rel: str) -> str:
-        return (
-            f"<div style='display:flex;align-items:center;gap:10px;"
-            f"padding:9px 0;border-bottom:1px solid #f1f5f9'>"
-            f"<div style='width:34px;height:34px;border-radius:50%;"
-            f"background:#4f46e5;display:flex;align-items:center;"
-            f"justify-content:center;color:white;font-size:0.72rem;"
-            f"font-weight:700;flex-shrink:0'>{init}</div>"
-            f"<div style='flex:1'>"
-            f"<div style='color:#1e293b;font-size:0.83rem;font-weight:500'>{nom}</div>"
-            f"<div style='color:#94a3b8;font-size:0.72rem'>{rel}</div>"
-            f"</div>"
-            f"<div style='width:8px;height:8px;border-radius:50%;"
-            f"background:#22c55e'></div>"
-            f"</div>"
-        )
+    fila = (
+        f"<div style='display:flex;align-items:center;gap:10px;"
+        f"padding:9px 0'>"
+        f"<div style='width:34px;height:34px;border-radius:50%;"
+        f"background:#4f46e5;display:flex;align-items:center;"
+        f"justify-content:center;color:white;font-size:0.72rem;"
+        f"font-weight:700;flex-shrink:0'>{iniciales}</div>"
+        f"<div style='flex:1'>"
+        f"<div style='color:#1e293b;font-size:0.83rem;font-weight:500'>{nombre}</div>"
+        f"<div style='color:#94a3b8;font-size:0.72rem'>{relacion}</div>"
+        f"</div>"
+        f"<div style='width:8px;height:8px;border-radius:50%;"
+        f"background:#22c55e'></div>"
+        f"</div>"
+    )
 
     st.markdown(
         f"""
@@ -388,8 +384,7 @@ def render_contactos_emergencia(contacto: str) -> None:
                     box-shadow:0 1px 3px rgba(0,0,0,0.05)">
           <div style="color:#374151;font-size:0.82rem;font-weight:600;
                       margin-bottom:2px">Contactos de emergencia</div>
-          {_fila(iniciales1, nombre1, relacion1)}
-          {_fila(iniciales2, nombre2, relacion2)}
+          {fila}
         </div>
         """,
         unsafe_allow_html=True,
@@ -602,11 +597,13 @@ def render_historial(data: dict[str, Any]) -> None:
             f"</div>"
         )
 
+    # Altura fija para ~5 filas (~45px c/u); scroll para ver el resto
     st.markdown(
         f"<div style='background:white;border-radius:12px;"
         f"padding:8px 16px;margin-bottom:12px;"
         f"border:1px solid #e2e8f0;"
-        f"box-shadow:0 1px 3px rgba(0,0,0,0.05)'>{rows_html}</div>",
+        f"box-shadow:0 1px 3px rgba(0,0,0,0.05);"
+        f"max-height:230px;overflow-y:auto'>{rows_html}</div>",
         unsafe_allow_html=True,
     )
 
@@ -615,16 +612,10 @@ def render_historial(data: dict[str, Any]) -> None:
 
 def render_controles_demo(estado: str) -> None:
     """RF-09, RF-10: Panel de control manual para demostracion ante jurado."""
-    st.markdown(
-        "<div style='background:white;border-radius:12px;"
-        "padding:16px;margin-bottom:8px;"
-        "border:1px solid #e2e8f0;"
-        "box-shadow:0 1px 3px rgba(0,0,0,0.05)'>",
-        unsafe_allow_html=True,
-    )
+    # Título de la sección (sin abrir div que abarque widgets nativos de Streamlit)
     st.markdown(
         "<div style='color:#374151;font-size:0.85rem;font-weight:600;"
-        "margin-bottom:10px'>🎛️ Panel de control — Demo</div>",
+        "margin-bottom:8px;margin-top:4px'>🎛️ Panel de control — Demo</div>",
         unsafe_allow_html=True,
     )
 
@@ -686,7 +677,6 @@ def render_controles_demo(estado: str) -> None:
             except Exception:
                 pass
 
-    st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
     if st.button(
         "🔄 Reiniciar sistema (limpiar historial)",
         type="secondary",
@@ -698,10 +688,9 @@ def render_controles_demo(estado: str) -> None:
         except Exception:
             pass
 
-    st.markdown("</div>", unsafe_allow_html=True)
     st.markdown(
         "<div style='color:#94a3b8;font-size:0.74rem;text-align:center;"
-        "margin-top:4px'>Modo demo — sin conexión real</div>",
+        "margin-top:2px;margin-bottom:4px'>Modo demo — sin conexión real</div>",
         unsafe_allow_html=True,
     )
 

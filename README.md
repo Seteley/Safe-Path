@@ -56,7 +56,7 @@ prueba safepath/
     │   ├── server.py          Servidor Flask con endpoints REST
     │   ├── parser.py          Extraccion de acelerometro/GPS desde payloads HTTP
     │   ├── logic.py           Maquina de estados con timers thread-safe
-    │   └── notifications.py   Envio de email SMTP al contacto de confianza
+    │   └── notifications.py   Envio de SMS al contacto de confianza (Twilio)
     │
     ├── dashboard/
     │   ├── __init__.py
@@ -79,13 +79,13 @@ prueba safepath/
 | Archivo | Proposito |
 |---------|-----------|
 | `config.py` | Contiene todas las constantes del sistema: umbral de aceleracion (15 m/s2), umbral de movimiento GPS (~4m), duracion de la verificacion (10s), duracion de la alerta (30s), host, puerto, datos de la usuaria de prueba y ubicacion de referencia. Cambiar cualquier valor aqui afecta a todo el sistema. |
-| `settings.py` | Carga secrets desde `.env` (credenciales SMTP). Separado de `config.py` para no exponer secrets en imports. |
+| `settings.py` | Carga secrets desde `.env` (credenciales Twilio). Separado de `config.py` para no exponer secrets en imports. |
 | `logic.py` | Maquina de estados con 4 estados: `NORMAL`, `VERIFICANDO`, `ALERTA`, `RESUELTO`. Thread-safe con `threading.Lock`. Maneja temporizadores trackeados para countdown y auto-escalamiento. Guarda el estado en `state.json` con escritura atomica. Historial de ultimos 10 eventos con timestamps ISO 8601. |
 | `server.py` | Servidor HTTP Flask con 8 endpoints. Usa `parser.py` para extraer aceleracion y GPS de multiples formatos JSON. Logging estructurado para diagnostico en vivo. |
 | `parser.py` | Funciones de parsing flexibles que extraen aceleracion (`ax,ay,az`) y coordenadas GPS (`lat,lon`) de multiples formatos JSON -- compatible con Sensor Logger, Phyphox y sensores nativos. |
-| `notifications.py` | Envia email SMTP al contacto de confianza cuando el estado transiciona a ALERTA. Usa `settings.py` para credenciales. |
+| `notifications.py` | Envia SMS al contacto de confianza via Twilio cuando el estado transiciona a ALERTA. El mensaje incluye nombre de usuaria, enlace de Google Maps, hora del evento y tipo de activacion. Usa `settings.py` para credenciales. |
 | `dashboard.py` | Orquestador Streamlit que lee `state.json` cada 1s y renderiza todos los componentes. Layout de 2 columnas estable en pantalla 15". |
-| `components.py` | Componentes visuales individuales: indicador de estado con color SafeCorp, barra de aceleracion, flujo DETECTAR->VERIFICAR->ESCALAR, countdown, mapa Folium, historial de eventos. El mapa se reconstruye solo al cambiar de estado o detectar >4m de movimiento real. |
+| `components.py` | Componentes visuales individuales: indicador de estado con color SafeCorp, barra de aceleracion, flujo DETECTAR->VERIFICAR->ESCALAR, countdown, mapa Folium, historial de eventos, y panel de control de demo (botones para forzar estados y reiniciar). El mapa se reconstruye solo al cambiar de estado o detectar >4m de movimiento real. |
 | `schema.py` | Define el contrato explicito del `state.json`: nombres de campos, tipos, valores por defecto, estados validos, paleta de colores. Ambos modulos importan desde aqui. |
 | `utils.py` | Utilidades compartidas: configuracion de logging, deteccion de IP local, escritura atomica de JSON con archivo temporal + `os.replace`. |
 
@@ -203,8 +203,9 @@ El dashboard implementa 3 mecanismos para que el mapa Folium no parpadee:
 flask>=2.0           Servidor HTTP local
 streamlit>=1.30      Dashboard interactivo
 folium>=0.14         Mapa interactivo (renderizado de HTML)
-requests>=2.25       Cliente HTTP (para el boton cancelar del dashboard)
+requests>=2.25       Cliente HTTP (para botones del dashboard)
 python-dotenv>=1.0   Carga variables de entorno desde archivo .env
+twilio>=8.0          Envio de SMS al contacto de confianza
 ```
 
 **Dependencias de desarrollo:**
@@ -372,30 +373,58 @@ UMBRAL_MOVIMIENTO_GPS = 0.00004  # grados (~4m) para ignorar ruido del sensor GP
 
 ---
 
-## Notificaciones por Email
+## Notificaciones por SMS (Twilio)
 
-Cuando el sistema escala a ALERTA, envia automaticamente un email al contacto de confianza con la ubicacion GPS, aceleracion detectada y hora del evento.
+Cuando el sistema escala a ALERTA, envia automaticamente un SMS al contacto de confianza. El mensaje incluye el nombre de la usuaria, enlace directo a Google Maps con la ubicacion GPS, hora exacta del evento y si la alerta fue activada automaticamente o forzada por el operador.
 
-### Setup (2 minutos)
+### Setup (5 minutos)
 
-1. Crear una cuenta Gmail para el proyecto (ej: `safepath.demo@gmail.com`)
-2. Activar verificacion en 2 pasos en https://myaccount.google.com/security
-3. Generar App Password en https://myaccount.google.com/apppasswords
-   - Nombre: "SafePath"
-   - Copiar el codigo de 16 caracteres (sin espacios)
-4. Copiar `.env.example` a `.env` y completar:
+1. Crear cuenta en https://twilio.com (el trial gratuito incluye credito suficiente para la demo)
+2. En el dashboard de Twilio obtener:
+   - **Account SID** (empieza con `AC...`)
+   - **Auth Token**
+3. Obtener un numero Twilio en: Console > Phone Numbers > Manage > Buy a number
+4. Copiar `safepath_mvp/.env.example` a `safepath_mvp/.env` y completar:
    ```
-   SAFEPATH_SMTP_EMAIL=safepath.demo@gmail.com
-   SAFEPATH_SMTP_PASSWORD=abcdefghijklmnop
-   SAFEPATH_CONTACTO_EMAIL=maria.flores@gmail.com
+   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   TWILIO_FROM_NUMBER=+1415xxxxxxx
+   TWILIO_TO_NUMBER=+51xxxxxxxxx
    ```
+   Los numeros deben incluir el codigo de pais (Peru: `+51`, USA: `+1`).
 
 ### Como funciona
 
-- Al transicionar a ALERTA (por escalamiento automatico o `/trigger`), el sistema lanza un hilo en segundo plano que envia el email
+- Al transicionar a ALERTA (por escalamiento automatico o `/trigger`), el sistema lanza un hilo en segundo plano que envia el SMS
 - El envio no bloquea la maquina de estados
-- Si falta configuracion (`.env` incompleto), solo imprime un aviso en logs
+- Si falta configuracion (`.env` incompleto o ausente), solo imprime un aviso en logs y continua normalmente
 - La notificacion se envia solo una vez por transicion a ALERTA
+
+### Ejemplo del SMS recibido
+
+```
+[SAFE-PATH] ALERTA DE EMERGENCIA
+Usuaria: Ana Flores
+Hora: 2026-05-27 20:15:33
+Ubicacion: https://maps.google.com/?q=-12.0833,-77.05
+Activacion: Automatica (temporizador)
+```
+
+---
+
+## Panel de control — Demo
+
+El dashboard incluye un panel en la parte inferior para controlar el sistema manualmente sin necesidad de sacudir el celular. Util para demostrar cada fase ante el jurado de forma controlada.
+
+| Boton | Accion |
+|---|---|
+| 🟡 Forzar VERIFICANDO | Simula deteccion de movimiento anomalo e inicia el countdown de 10s |
+| 🔴 Forzar ALERTA | Escala directamente a ALERTA y envia el SMS al contacto |
+| 🔵 Forzar RESUELTO | Pasa a RESUELTO (el sistema vuelve a NORMAL a los 5s automaticamente) |
+| 🟢 Forzar NORMAL | Regresa al monitoreo normal sin notificar |
+| 🔄 Reiniciar sistema | Borra el historial, cancela todos los timers y vuelve a NORMAL |
+
+Cada boton se deshabilita automaticamente si el sistema ya esta en ese estado. El boton de reinicio es especialmente util para empezar cada demostracion desde cero sin reiniciar la aplicacion.
 
 ---
 

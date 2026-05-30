@@ -10,14 +10,19 @@ import time
 import streamlit as st
 
 from safepath_mvp.dashboard.components import (
+    inject_global_css,
     render_aceleracion,
+    render_contactos_emergencia,
     render_controles_demo,
     render_countdown,
     render_estado,
     render_flujo,
+    render_footer,
     render_header,
     render_historial,
     render_mapa,
+    render_semaforo_legend,
+    render_state_banner,
 )
 from safepath_mvp.shared.schema import ESTADO_INICIAL
 from safepath_mvp.simulador.config import (
@@ -32,6 +37,7 @@ st.set_page_config(
     page_title="SAFE-PATH - Panel de seguridad",
     page_icon="\U0001f7e3",
     layout="wide",
+    menu_items={},
 )
 
 
@@ -72,45 +78,50 @@ def render() -> None:
 
     init_session()
 
+    # 1. CSS global y header dark-navy
+    inject_global_css()
     render_header(estado)
 
-    col1, col2 = st.columns([1, 1.4])
-
+    # 2. GPS texto para render_estado
     gps_lat = data.get("lat", UBICACION_LAT)
     gps_lon = data.get("lon", UBICACION_LON)
     gps_activo = gps_lat != UBICACION_LAT or gps_lon != UBICACION_LON
     gps_texto = (
-        f"\U0001f4cd GPS: {gps_lat:.6f}, {gps_lon:.6f}"
+        f"GPS: {gps_lat:.6f}, {gps_lon:.6f}"
         if gps_activo
-        else "\U0001f4cd GPS: usando ubicacion de referencia"
+        else "GPS: usando ubicacion de referencia"
     )
+
+    # 3. Layout de 2 columnas (~35 / 65)
+    col1, col2 = st.columns([1, 1.8])
 
     with col1:
         render_estado(estado, usuaria, gps_texto, contacto)
-        st.markdown("---")
         render_aceleracion(
             data.get("aceleracion_actual", 0),
             data.get("umbral", UMBRAL_ACELERACION),
         )
-        st.markdown("---")
         render_flujo(estado)
         # RD02: st.empty() fija una posicion estable en el arbol de widgets,
         # evitando que el diff de Streamlit duplique render_flujo al
         # agregar/quitar render_countdown en cada ciclo de rerun.
-        # Se llama .empty() explicitamente cuando no aplica para limpiar
-        # el contenido del ciclo anterior (st.empty no limpia solo).
         _countdown_slot = st.empty()
         if estado == "VERIFICANDO":
             with _countdown_slot.container():
                 render_countdown(data)
         else:
             _countdown_slot.empty()
+        render_contactos_emergencia(contacto)
+        render_semaforo_legend()
 
     with col2:
+        render_state_banner(estado)
         render_mapa(data, st.session_state)
         render_historial(data)
+        render_controles_demo(estado)
 
-    render_controles_demo(estado)
+    # 4. Footer full-width
+    render_footer(estado)
 
     time.sleep(1)
     st.rerun()

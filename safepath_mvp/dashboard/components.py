@@ -93,7 +93,7 @@ def render_estado(
 def render_aceleracion(accel: float, umbral: float) -> None:
     """RF-D04, D05: Barra de progreso + metrica numerica de aceleracion."""
     st.markdown("**Aceleracion detectada**")
-    pct = min(accel / (umbral * 1.5), 1.0)
+    pct = min(accel / umbral, 1.0) if umbral else 0.0
     st.metric(
         "Aceleracion actual",
         f"{accel:.1f} m/s\u00b2",
@@ -108,10 +108,10 @@ def render_flujo(estado: str) -> None:
     color = COLORES.get(estado, "#888")
     nodos = ["DETECTAR", "VERIFICAR", "ESCALAR"]
     activos: dict[str, list[bool]] = {
-        "NORMAL": [False, False, False],
-        "VERIFICANDO": [True, True, False],
-        "ALERTA": [True, True, True],
-        "RESUELTO": [True, True, True],
+        "NORMAL":      [True, False, False],
+        "VERIFICANDO": [False, True, False],
+        "ALERTA":      [False, False, True],
+        "RESUELTO":    [False, False, False],
     }
     estados_nodos = activos.get(estado, [False, False, False])
 
@@ -179,7 +179,7 @@ def construir_mapa(
     m = folium.Map(
         location=[lat, lon],
         zoom_start=15,
-        tiles="CartoDB positron",
+        tiles="OpenStreetMap",
     )
 
     popup_text = f"{usuaria} \u2014 {estado}"

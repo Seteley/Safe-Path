@@ -40,7 +40,11 @@ def load_state() -> dict:
     try:
         with open("safepath_mvp/state.json", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except FileNotFoundError:
+        st.session_state["_state_error"] = "state.json no encontrado. Mostrando valores por defecto."
+        return dict(ESTADO_INICIAL)
+    except Exception as exc:
+        st.session_state["_state_error"] = f"state.json corrupto o ilegible: {exc}. Mostrando valores por defecto."
         return dict(ESTADO_INICIAL)
 
 
@@ -59,6 +63,9 @@ def init_session() -> None:
 def render() -> None:
     """Orquestador principal: carga estado y renderiza todos los componentes."""
     data = load_state()
+    err = st.session_state.pop("_state_error", None)
+    if err:
+        st.error(err)
     estado = data.get("estado", "NORMAL")
     usuaria = data.get("usuaria", USUARIA)
     contacto = data.get("contacto", CONTACTO)

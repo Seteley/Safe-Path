@@ -94,8 +94,17 @@ def render() -> None:
         )
         st.markdown("---")
         render_flujo(estado)
+        # RD02: st.empty() fija una posicion estable en el arbol de widgets,
+        # evitando que el diff de Streamlit duplique render_flujo al
+        # agregar/quitar render_countdown en cada ciclo de rerun.
+        # Se llama .empty() explicitamente cuando no aplica para limpiar
+        # el contenido del ciclo anterior (st.empty no limpia solo).
+        _countdown_slot = st.empty()
         if estado == "VERIFICANDO":
-            render_countdown(data)
+            with _countdown_slot.container():
+                render_countdown(data)
+        else:
+            _countdown_slot.empty()
 
     with col2:
         render_mapa(data, st.session_state)

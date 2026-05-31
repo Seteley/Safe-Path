@@ -535,7 +535,7 @@ def render_mapa(data: dict[str, Any], session_state: Any) -> None:
                 "border-radius:8px !important;}</style>"
             )
             st.markdown(border_css, unsafe_allow_html=True)
-        st.components.v1.html(session_state.mapa_html, height=330)
+        st.iframe(session_state.mapa_html, height=330)
 
     # Barra GPS oscura debajo del mapa (igual que en Figma)
     coords_text = f"{gps_lat:.6f}, {gps_lon:.6f}"

@@ -636,7 +636,7 @@ def render_controles_demo(estado: str) -> None:
 
     with col_v:
         if st.button(
-            "🟡 Forzar VERIF.",
+            "🟡 VERIFICAR",
             disabled=estado == "VERIFICANDO",
             use_container_width=True,
             help="Simula detección de movimiento anómalo e inicia el countdown",
@@ -650,7 +650,7 @@ def render_controles_demo(estado: str) -> None:
 
     with col_a:
         if st.button(
-            "🔴 Forzar ALERTA",
+            "🔴 ALERTA",
             disabled=estado == "ALERTA",
             use_container_width=True,
             help="Escala directamente a estado de alerta y notifica al contacto",
@@ -664,7 +664,7 @@ def render_controles_demo(estado: str) -> None:
 
     with col_r:
         if st.button(
-            "🔵 Forzar RESOL.",
+            "🔵 RESOLVER",
             disabled=estado == "RESUELTO",
             use_container_width=True,
             help="Marca el evento como resuelto",
@@ -678,7 +678,7 @@ def render_controles_demo(estado: str) -> None:
 
     with col_n:
         if st.button(
-            "🟢 Forzar NORMAL",
+            "🟢 NORMAL",
             disabled=estado == "NORMAL",
             use_container_width=True,
             help="Regresa al monitoreo normal",

@@ -98,6 +98,19 @@ def inject_global_css() -> None:
             overflow: hidden !important;
             pointer-events: none !important;
         }
+
+        /* ── Animaciones del brazalete ─────────────────────────────────── */
+
+        /* VERIFICANDO: vibración horizontal (simula el motor del brazalete
+           durante toda la cuenta regresiva) */
+        @keyframes bracelet-shake {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            15%, 45%, 75% { transform: translateX(-4px) rotate(-2deg); }
+            30%, 60%, 90% { transform: translateX(4px) rotate(2deg); }
+        }
+
+        .bracelet-normal { animation: none; }
+        .bracelet-shake  { animation: bracelet-shake 0.4s ease-in-out infinite; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -152,6 +165,9 @@ def render_estado(
     color = COLORES.get(estado, "#888")
     emoji = EMOJIS.get(estado, "⚪")
 
+    # Solo vibra durante VERIFICANDO; el resto muestra la imagen estática normal
+    _anim_class = "bracelet-shake" if estado == "VERIFICANDO" else "bracelet-normal"
+
     # Imagen de la pulsera en base64
     img_path = os.path.join("safepath_mvp", "assets", "pulsera.png")
     card_inner = ""
@@ -160,6 +176,7 @@ def render_estado(
             b64 = base64.b64encode(fh.read()).decode()
         card_inner = (
             f"<img src='data:image/png;base64,{b64}' "
+            f"class='{_anim_class}' "
             f"style='width:120px;display:block;margin:0 auto'/>"
         )
     else:

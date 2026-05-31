@@ -5,7 +5,6 @@ en tiempo real con mapa, indicadores y flujo visual.
 """
 
 import json
-import time
 
 import streamlit as st
 
@@ -65,8 +64,14 @@ def init_session() -> None:
         st.session_state.mapa_html = None
 
 
+@st.fragment(run_every=1)
 def render() -> None:
-    """Orquestador principal: carga estado y renderiza todos los componentes."""
+    """Orquestador principal: carga estado y renderiza todos los componentes.
+
+    Decorado con @st.fragment(run_every=1) para rerenderizar solo este
+    fragmento cada segundo, evitando el rerun completo de la pagina que
+    causaba parpadeo y race conditions al hacer clic en CANCELAR ALERTA.
+    """
     data = load_state()
     err = st.session_state.pop("_state_error", None)
     if err:
@@ -118,9 +123,6 @@ def render() -> None:
         render_mapa(data, st.session_state)
         render_historial(data)
         render_controles_demo(estado)
-
-    time.sleep(1)
-    st.rerun()
 
 
 render()

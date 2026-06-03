@@ -14,6 +14,8 @@ dependencies = [
     "requests>=2.25",
     "python-dotenv>=1.0",
     "twilio>=8.0",
+    "pyngrok>=7.0",
+    "qrcode[terminal]>=8.0",
 ]
 
 [project.optional-dependencies]

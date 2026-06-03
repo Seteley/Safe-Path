@@ -4,13 +4,13 @@ Recibe datos del acelerometro via HTTP POST, los procesa con la
 maquina de estados y expone endpoints REST para el dashboard.
 """
 
-from flask import Flask, request, jsonify
-import math
-from .config import *
-from .logic import StateMachine
-from .parser import extraer_aceleracion, extraer_gps, calcular_aceleracion_neta
+from flask import Flask, jsonify, request
+
 from ..shared.schema import ESTADOS_VALIDOS
 from ..shared.utils import get_local_ip, setup_logging
+from .config import GRAVEDAD, HOST, PORT
+from .logic import StateMachine
+from .parser import calcular_aceleracion_neta, extraer_aceleracion, extraer_gps
 
 logger = setup_logging("safepath.server")
 
@@ -62,12 +62,15 @@ def receive_data() -> tuple:
             lat, lon = gps
             machine.update_location(lat, lon)
 
-        gps_str = (
-            f" GPS=({machine.lat:.6f},{machine.lon:.6f})" if gps else ""
-        )
+        gps_str = f" GPS=({machine.lat:.6f},{machine.lon:.6f})" if gps else ""
         logger.debug(
             "ax=%.2f ay=%.2f az=%.2f net=%.2f state=%s%s",
-            ax, ay, az, net_acceleration, machine.state, gps_str,
+            ax,
+            ay,
+            az,
+            net_acceleration,
+            machine.state,
+            gps_str,
         )
 
         machine.update(net_acceleration)
@@ -130,18 +133,31 @@ def ping() -> tuple:
     return jsonify({"status": "alive", "state": machine.state})
 
 
+@app.route("/mobile", methods=["GET"])
+def mobile_view() -> tuple:
+    """Vista móvil minimalista para control desde teléfono."""
+    from .mobile_html import MOBILE_HTML
+
+    return MOBILE_HTML, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
 # ── Startup ──────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    from .tunnel import start_tunnel
+
     local_ip = get_local_ip()
     print("=" * 55)
     print("  SAFE-PATH SERVER (D1 - Simulador de Pulsera)")
     print(f"  IP detectada: {local_ip}")
-    print(f"  POST /data       <- Sensor Logger (acelerometro)")
-    print(f"  GET  /status     <- Estado completo")
-    print(f"  GET  /cancel     <- Cancelar verificacion")
-    print(f"  GET  /trigger?estado=X  <- Forzar estado (Plan B)")
-    print(f"  GET  /reset      <- Reiniciar para nueva demo")
-    print(f"  GET  /ping       <- Health check")
+    print("  POST /data       <- Sensor Logger (acelerometro)")
+    print("  GET  /status     <- Estado completo")
+    print("  GET  /cancel     <- Cancelar verificacion")
+    print("  GET  /trigger?estado=X  <- Forzar estado (Plan B)")
+    print("  GET  /reset      <- Reiniciar para nueva demo")
+    print("  GET  /ping       <- Health check")
+    print("  GET  /mobile     <- Vista movil (telefono)")
+    print("=" * 55)
+    start_tunnel(PORT)
     print("=" * 55)
     app.run(host=HOST, port=PORT)

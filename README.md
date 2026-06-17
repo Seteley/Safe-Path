@@ -251,14 +251,16 @@ pre-commit install
 
 1. Instalar **Phyphox** desde Play Store (Android) o App Store (iOS) -- es gratuita
 2. Conectar el celular a la **misma red WiFi** que la laptop
-3. Abrir Phyphox y seleccionar el experimento **"Accelerometer"** (o "Aceleracion")
+3. Abrir Phyphox y cargar el **experimento personalizado SafePath** (incluye acelerometro + GPS en una sola sesion). Los buffers que usa el sistema son:
+   - Acelerometro: `accX`, `accY`, `accZ`
+   - GPS: `locLat`, `locLon`
 4. Activar el **acceso remoto**: menu (⋮) → **"Allow remote access"** → confirmar
    - Phyphox mostrara una URL como `http://192.168.1.X:8080` -- esa es la IP del celular
 5. Copiar la **IP del celular** y pegarla en `safepath_mvp/simulador/config.py`:
    ```python
    PHYPHOX_IP: str = "192.168.1.X"  # reemplazar con la IP real
    ```
-6. (Opcional) Para GPS: abrir el experimento **"GPS"** en Phyphox en una segunda instancia o usar una app complementaria. Si Phyphox no tiene GPS activo, el sistema usara la ubicacion de referencia configurada en `config.py`.
+6. Presionar **Play** en Phyphox para iniciar la medicion -- el servidor empieza a recibir datos automaticamente cada 100 ms
 
 Al iniciar el servidor, se mostrara la URL de Phyphox configurada:
 ```
@@ -292,7 +294,7 @@ streamlit run safepath_mvp/dashboard/dashboard.py
 ```
 Se abre automaticamente en el navegador en `http://localhost:8501`
 
-**En el celular:** iniciar el streaming en Sensor Logger (boton Play).
+**En el celular:** presionar **Play** en Phyphox para iniciar la medicion.
 
 **Verificar conexion:** abrir en el navegador del celular `http://<IP>:5000/ping` -- debe responder `{"status":"alive"...}`.
 
@@ -340,7 +342,7 @@ curl http://localhost:5000/reset
 
 | Problema | Solucion |
 |---|---|
-| Sensor Logger no conecta | Verificar que laptop y celular esten en la misma WiFi. Probar `http://<IP>:5000/ping` desde el navegador del celular |
+| Phyphox no conecta | Verificar que laptop y celular esten en la misma WiFi y que el acceso remoto este activo en Phyphox. Probar `http://<IP>:5000/ping` desde el navegador del celular. Revisar diagnostico en `http://localhost:5000/phyphox-debug` |
 | El dashboard no reacciona | Usar `/trigger?estado=VERIFICANDO` para disparar estados manualmente sin celular |
 | Necesito reiniciar entre demos | Usar `/reset` para limpiar estado y empezar desde NORMAL |
 | Dashboard va lento | Cambiar `time.sleep(1)` a `time.sleep(2)` en `dashboard.py` |

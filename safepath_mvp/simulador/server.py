@@ -40,7 +40,7 @@ def phyphox_poller() -> None:
     global _phyphox_last_error, _phyphox_last_raw
     base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
     url_accel = f"{base}/get?accX=full&accY=full&accZ=full"
-    url_gps = f"{base}/get?lat=full&lon=full"
+    url_gps = f"{base}/get?locLat=full&locLon=full"
     logger.info("Phyphox poller iniciado → %s", base)
     _consecutive_errors = 0
 
@@ -219,9 +219,9 @@ def phyphox_debug() -> tuple:
 
     # GPS — intenta los nombres de buffer mas comunes de Phyphox
     gps_candidates = [
+        "locLat=full&locLon=full",
         "lat=full&lon=full",
         "latitude=full&longitude=full",
-        "gpsLat=full&gpsLon=full",
     ]
     for params in gps_candidates:
         try:
@@ -250,7 +250,7 @@ def phyphox_config() -> tuple:
     base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
     try:
         resp = http_client.get(f"{base}/config", timeout=3)
-        return resp.text, 200, {"Content-Type": "application/xml; charset=utf-8"}
+        return resp.text, 200, {"Content-Type": "text/plain; charset=utf-8"}
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502
 

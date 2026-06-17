@@ -179,8 +179,8 @@ def extraer_gps_phyphox(
         return None
     try:
         buf = data.get("buffer", {})
-        lat_list = buf.get("lat", {}).get("buffer", [])
-        lon_list = buf.get("lon", {}).get("buffer", [])
+        lat_list = buf.get("locLat", buf.get("lat", {})).get("buffer", [])
+        lon_list = buf.get("locLon", buf.get("lon", {})).get("buffer", [])
         if lat_list and lon_list:
             lat = float(lat_list[-1])
             lon = float(lon_list[-1])

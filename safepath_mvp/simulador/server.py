@@ -79,6 +79,11 @@ def phyphox_poller() -> None:
         time.sleep(PHYPHOX_POLL_INTERVAL)
 
 
+# Inicia el poller al cargar el modulo (no solo en __main__)
+_poller_thread = threading.Thread(target=phyphox_poller, daemon=True, name="phyphox-poller")
+_poller_thread.start()
+
+
 @app.route("/data", methods=["POST"])
 def receive_data() -> tuple:
     """RF-S01: Recibe datos del acelerometro y GPS (endpoint manual / fallback)."""
@@ -241,9 +246,6 @@ if __name__ == "__main__":
     print("  GET  /ping       <- Health check")
     print("  GET  /mobile     <- Vista movil (telefono)")
     print("=" * 55)
-
-    t = threading.Thread(target=phyphox_poller, daemon=True, name="phyphox-poller")
-    t.start()
 
     start_tunnel(PORT)
     print("=" * 55)

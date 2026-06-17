@@ -1,16 +1,26 @@
 """SAFE-PATH - Servidor Flask (Dimension 1: Simulador de Pulsera).
 
-Recibe datos del acelerometro via HTTP POST, los procesa con la
-maquina de estados y expone endpoints REST para el dashboard.
+Consulta periodicamente Phyphox (HTTP GET) para obtener acelerometro y GPS,
+los procesa con la maquina de estados y expone endpoints REST para el dashboard.
 """
 
+import threading
+import time
+
+import requests as http_client
 from flask import Flask, jsonify, request
 
 from ..shared.schema import ESTADOS_VALIDOS
 from ..shared.utils import get_local_ip, setup_logging
-from .config import GRAVEDAD, HOST, PORT
+from .config import GRAVEDAD, HOST, PHYPHOX_IP, PHYPHOX_POLL_INTERVAL, PHYPHOX_PORT, PORT
 from .logic import StateMachine
-from .parser import calcular_aceleracion_neta, extraer_aceleracion, extraer_gps
+from .parser import (
+    calcular_aceleracion_neta,
+    extraer_aceleracion,
+    extraer_aceleracion_phyphox,
+    extraer_gps,
+    extraer_gps_phyphox,
+)
 
 logger = setup_logging("safepath.server")
 
@@ -21,9 +31,39 @@ machine = StateMachine()
 # ── Endpoints principales (spec D1) ──────────────────────────────
 
 
+def phyphox_poller() -> None:
+    """Hilo daemon que consulta Phyphox cada PHYPHOX_POLL_INTERVAL segundos."""
+    base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
+    url_accel = f"{base}/get?accX=full&accY=full&accZ=full"
+    url_gps = f"{base}/get?lat=full&lon=full"
+    logger.info("Phyphox poller iniciado → %s", base)
+
+    while True:
+        try:
+            resp = http_client.get(url_accel, timeout=0.5)
+            resultado = extraer_aceleracion_phyphox(resp.json())
+            if resultado:
+                ax, ay, az = resultado
+                net = calcular_aceleracion_neta(ax, ay, az, GRAVEDAD)
+                machine.update(net)
+                logger.debug("Phyphox accel ax=%.2f ay=%.2f az=%.2f net=%.2f", ax, ay, az, net)
+        except Exception as exc:
+            logger.debug("Phyphox accel no disponible: %s", exc)
+
+        try:
+            resp_gps = http_client.get(url_gps, timeout=0.5)
+            gps = extraer_gps_phyphox(resp_gps.json())
+            if gps:
+                machine.update_location(*gps)
+        except Exception as exc:
+            logger.debug("Phyphox GPS no disponible: %s", exc)
+
+        time.sleep(PHYPHOX_POLL_INTERVAL)
+
+
 @app.route("/data", methods=["POST"])
 def receive_data() -> tuple:
-    """RF-S01: Recibe datos del acelerometro y GPS desde Sensor Logger."""
+    """RF-S01: Recibe datos del acelerometro y GPS (endpoint manual / fallback)."""
     try:
         raw = request.get_data(as_text=True)
         logger.info("POST /data recibido (%d bytes): %.500s", len(raw), raw)
@@ -150,7 +190,10 @@ if __name__ == "__main__":
     print("=" * 55)
     print("  SAFE-PATH SERVER (D1 - Simulador de Pulsera)")
     print(f"  IP detectada: {local_ip}")
-    print("  POST /data       <- Sensor Logger (acelerometro)")
+    print(
+        f"  Phyphox → http://{PHYPHOX_IP}:{PHYPHOX_PORT} (polling {int(PHYPHOX_POLL_INTERVAL * 1000)} ms)"
+    )
+    print("  POST /data       <- Fallback manual (sin Phyphox)")
     print("  GET  /status     <- Estado completo")
     print("  GET  /cancel     <- Cancelar verificacion")
     print("  GET  /trigger?estado=X  <- Forzar estado (Plan B)")
@@ -158,6 +201,10 @@ if __name__ == "__main__":
     print("  GET  /ping       <- Health check")
     print("  GET  /mobile     <- Vista movil (telefono)")
     print("=" * 55)
+
+    t = threading.Thread(target=phyphox_poller, daemon=True, name="phyphox-poller")
+    t.start()
+
     start_tunnel(PORT)
     print("=" * 55)
     app.run(host=HOST, port=PORT)

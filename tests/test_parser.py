@@ -6,9 +6,11 @@ Cubre: RF-S01, S02, S15, RNF-S03.
 import pytest
 
 from safepath_mvp.simulador.parser import (
-    extraer_aceleracion,
-    extraer_gps,
     calcular_aceleracion_neta,
+    extraer_aceleracion,
+    extraer_aceleracion_phyphox,
+    extraer_gps,
+    extraer_gps_phyphox,
 )
 
 
@@ -35,15 +37,15 @@ class TestExtraerAceleracion:
         result = extraer_aceleracion(data)
         assert result == (0.1, 0.2, 9.9)
 
-    def test_formato_sensor_logger_android(self):
-        data = [
-            {
-                "accelerometerAccelerationX": 0.1,
-                "accelerometerAccelerationY": 0.2,
-                "accelerometerAccelerationZ": 9.8,
+    def test_formato_phyphox_buffer(self):
+        data = {
+            "buffer": {
+                "accX": {"buffer": [0.0, 0.1]},
+                "accY": {"buffer": [0.0, 0.2]},
+                "accZ": {"buffer": [9.7, 9.8]},
             }
-        ]
-        result = extraer_aceleracion(data)
+        }
+        result = extraer_aceleracion_phyphox(data)
         assert result == (0.1, 0.2, 9.8)
 
     def test_formato_accel_con_mayusculas(self):
@@ -71,6 +73,37 @@ class TestToleranciaFallos:
     def test_no_crashea_con_lista_plana(self):
         result = extraer_aceleracion([1, 2, 3])
         assert result is None
+
+
+class TestPhyphoxParser:
+    """Tests para los parsers especificos del formato buffer de Phyphox."""
+
+    def test_aceleracion_buffer_vacio_retorna_none(self):
+        data = {"buffer": {"accX": {"buffer": []}, "accY": {"buffer": []}, "accZ": {"buffer": []}}}
+        assert extraer_aceleracion_phyphox(data) is None
+
+    def test_aceleracion_sin_buffer_key_retorna_none(self):
+        assert extraer_aceleracion_phyphox({"foo": "bar"}) is None
+
+    def test_aceleracion_none_retorna_none(self):
+        assert extraer_aceleracion_phyphox(None) is None
+
+    def test_gps_phyphox_extrae_lat_lon(self):
+        data = {
+            "buffer": {
+                "lat": {"buffer": [-12.08, -12.09]},
+                "lon": {"buffer": [-77.05, -77.06]},
+            }
+        }
+        result = extraer_gps_phyphox(data)
+        assert result == (-12.09, -77.06)
+
+    def test_gps_phyphox_rechaza_cero(self):
+        data = {"buffer": {"lat": {"buffer": [0.0]}, "lon": {"buffer": [0.0]}}}
+        assert extraer_gps_phyphox(data) is None
+
+    def test_gps_phyphox_retorna_none_sin_datos(self):
+        assert extraer_gps_phyphox(None) is None
 
 
 class TestExtraerGPS:

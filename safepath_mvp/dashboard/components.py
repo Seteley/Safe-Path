@@ -7,6 +7,7 @@ Separado de dashboard.py para permitir desarrollo en paralelo.
 from __future__ import annotations
 
 import base64
+import contextlib
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -15,21 +16,19 @@ import folium
 import requests
 import streamlit as st
 
-from ..simulador.config import (
-    CONTACTO,
-    DIRECCION,
-    TIEMPO_VERIFICACION,
-    UBICACION_LAT,
-    UBICACION_LON,
-    UMBRAL_ACELERACION,
-    UMBRAL_MOVIMIENTO_GPS,
-    USUARIA,
-)
 from ..shared.schema import (
     COLOR_ALERTA,
     COLOR_NORMAL,
     COLOR_RESUELTO,
     COLOR_VERIFICANDO,
+)
+from ..simulador.config import (
+    DIRECCION,
+    TIEMPO_VERIFICACION,
+    UBICACION_LAT,
+    UBICACION_LON,
+    UMBRAL_MOVIMIENTO_GPS,
+    USUARIA,
 )
 
 COLORES: dict[str, str] = {
@@ -50,6 +49,7 @@ NAVY = "#1e2d4f"
 
 
 # ── CSS global ────────────────────────────────────────────────────────────────
+
 
 def inject_global_css() -> None:
     """Inyecta CSS global: fondo claro, fuente Inter, padding reset."""
@@ -119,6 +119,7 @@ def inject_global_css() -> None:
 
 # ── Header ────────────────────────────────────────────────────────────────────
 
+
 def render_header(estado: str) -> None:
     """RF-D02: Barra dark-navy con logo, titulo y tabs Dashboard/Alertas."""
     st.markdown(
@@ -158,9 +159,8 @@ def render_header(estado: str) -> None:
 
 # ── Estado (pulsera + info) ───────────────────────────────────────────────────
 
-def render_estado(
-    estado: str, usuaria: str, gps_texto: str, contacto: str
-) -> None:
+
+def render_estado(estado: str, usuaria: str, gps_texto: str, contacto: str) -> None:
     """RF-D02, D03, D10, D16: Pulsera card + estado + GPS + contacto."""
     color = COLORES.get(estado, "#888")
     emoji = EMOJIS.get(estado, "⚪")
@@ -239,24 +239,27 @@ def render_estado(
 
 # ── Aceleracion ───────────────────────────────────────────────────────────────
 
+
 def render_aceleracion(accel: float, umbral: float) -> None:
     """RF-D04, D05: Valor grande coloreado + barra de progreso dinamica."""
     pct = min(accel / umbral, 1.0) if umbral else 0.0
     superado = accel >= umbral
     val_color = "#ef4444" if superado else "#1e293b"
     bar_color = "#ef4444" if superado else "#22c55e"
-    nota = (
-        f"↑ Umbral: {umbral:.1f} m/s² — SUPERADO"
-        if superado
-        else f"Umbral: {umbral:.1f} m/s²"
-    )
+    nota = f"↑ Umbral: {umbral:.1f} m/s² — SUPERADO" if superado else f"Umbral: {umbral:.1f} m/s²"
     nota_color = "#ef4444" if superado else "#94a3b8"
 
     st.markdown(
         f"""
         <div style="margin-bottom:4px">
-          <div style="color:#374151;font-size:0.82rem;font-weight:600">
-            Aceleración detectada</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;
+                      margin-bottom:2px">
+            <div style="color:#374151;font-size:0.82rem;font-weight:600">
+              Aceleración detectada</div>
+            <div style="background:#4f46e5;color:white;font-size:0.65rem;
+                        font-weight:700;padding:2px 8px;border-radius:10px;
+                        letter-spacing:0.04em">📡 Phyphox</div>
+          </div>
           <div style="color:#94a3b8;font-size:0.74rem;margin-bottom:2px">
             Aceleración actual</div>
           <div style="color:{val_color};font-size:2.6rem;font-weight:700;
@@ -286,15 +289,16 @@ def render_aceleracion(accel: float, umbral: float) -> None:
 
 # ── Flujo interno ─────────────────────────────────────────────────────────────
 
+
 def render_flujo(estado: str) -> None:
     """RF-D06: Nodos DETECTAR -> VERIFICAR -> ESCALAR con color dinamico."""
     color = COLORES.get(estado, "#888")
     nodos = ["DETECTAR", "VERIFICAR", "ESCALAR"]
     activos: dict[str, list[bool]] = {
-        "NORMAL":      [True, False, False],
+        "NORMAL": [True, False, False],
         "VERIFICANDO": [False, True, False],
-        "ALERTA":      [False, False, True],
-        "RESUELTO":    [False, False, False],
+        "ALERTA": [False, False, True],
+        "RESUELTO": [False, False, False],
     }
     estados_nodos = activos.get(estado, [False, False, False])
 
@@ -322,6 +326,7 @@ def render_flujo(estado: str) -> None:
 
 
 # ── Countdown (VERIFICANDO) ───────────────────────────────────────────────────
+
 
 def calcular_countdown(data: dict[str, Any]) -> int:
     """RF-D07: Calcula countdown real desde timestamp_inicio_verificando."""
@@ -357,13 +362,12 @@ def render_countdown(data: dict[str, Any]) -> None:
         unsafe_allow_html=True,
     )
     if st.button("✅ CANCELAR ALERTA", type="secondary"):
-        try:
+        with contextlib.suppress(Exception):
             requests.get("http://localhost:5000/cancel", timeout=2)
-        except Exception:
-            pass
 
 
 # ── Contactos de emergencia ───────────────────────────────────────────────────
+
 
 def render_contactos_emergencia(contacto: str) -> None:
     """Contactos de emergencia — solo los definidos en config.py."""
@@ -406,6 +410,7 @@ def render_contactos_emergencia(contacto: str) -> None:
 
 # ── Semaforo ──────────────────────────────────────────────────────────────────
 
+
 def render_semaforo_legend() -> None:
     """Leyenda semaforo al pie de la columna izquierda."""
     items = [
@@ -437,6 +442,7 @@ def render_semaforo_legend() -> None:
 
 # ── Banner de estado (sobre el mapa) ─────────────────────────────────────────
 
+
 def render_state_banner(estado: str) -> None:
     """Banner VERIFICANDO/ALERTA sobre el mapa en columna derecha."""
     if estado == "VERIFICANDO":
@@ -462,6 +468,7 @@ def render_state_banner(estado: str) -> None:
 
 
 # ── Mapa ──────────────────────────────────────────────────────────────────────
+
 
 def construir_mapa(
     lat: float,
@@ -493,9 +500,7 @@ def construir_mapa(
         [lat, lon],
         popup=popup_text,
         tooltip=f"\U0001f4cd {'GPS activo' if gps_activo else direccion_ref}",
-        icon=folium.Icon(
-            color=icon_color.get(estado, "gray"), icon="user", prefix="fa"
-        ),
+        icon=folium.Icon(color=icon_color.get(estado, "gray"), icon="user", prefix="fa"),
     ).add_to(m)
 
     return m
@@ -512,15 +517,12 @@ def render_mapa(data: dict[str, Any], session_state: Any) -> None:
 
     gps_cambio = (
         abs(gps_lat - (session_state.ultimo_lat or gps_lat)) > UMBRAL_MOVIMIENTO_GPS
-        or abs(gps_lon - (session_state.ultimo_lon or gps_lon))
-        > UMBRAL_MOVIMIENTO_GPS
+        or abs(gps_lon - (session_state.ultimo_lon or gps_lon)) > UMBRAL_MOVIMIENTO_GPS
     )
     mapa_reconstruir = session_state.ultimo_estado != estado or gps_cambio
 
     if mapa_reconstruir:
-        m = construir_mapa(
-            gps_lat, gps_lon, estado, usuaria, direccion_ref, gps_activo
-        )
+        m = construir_mapa(gps_lat, gps_lon, estado, usuaria, direccion_ref, gps_activo)
         session_state.mapa_html = m._repr_html_()
         session_state.ultimo_estado = estado
         session_state.ultimo_lat = gps_lat
@@ -556,6 +558,7 @@ def render_mapa(data: dict[str, Any], session_state: Any) -> None:
 
 
 # ── Historial ─────────────────────────────────────────────────────────────────
+
 
 def render_historial(data: dict[str, Any]) -> None:
     """RF-D14: Historial con badge coloreado y aceleracion a la derecha."""
@@ -623,6 +626,7 @@ def render_historial(data: dict[str, Any]) -> None:
 
 # ── Panel de control demo ─────────────────────────────────────────────────────
 
+
 def render_controles_demo(estado: str) -> None:
     """RF-09, RF-10: Panel de control manual para demostracion ante jurado."""
     # Título de la sección (sin abrir div que abarque widgets nativos de Streamlit)
@@ -641,12 +645,8 @@ def render_controles_demo(estado: str) -> None:
             use_container_width=True,
             help="Simula detección de movimiento anómalo e inicia el countdown",
         ):
-            try:
-                requests.get(
-                    "http://localhost:5000/trigger?estado=VERIFICANDO", timeout=2
-                )
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                requests.get("http://localhost:5000/trigger?estado=VERIFICANDO", timeout=2)
 
     with col_a:
         if st.button(
@@ -655,12 +655,8 @@ def render_controles_demo(estado: str) -> None:
             use_container_width=True,
             help="Escala directamente a estado de alerta y notifica al contacto",
         ):
-            try:
-                requests.get(
-                    "http://localhost:5000/trigger?estado=ALERTA", timeout=2
-                )
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                requests.get("http://localhost:5000/trigger?estado=ALERTA", timeout=2)
 
     with col_r:
         if st.button(
@@ -669,12 +665,8 @@ def render_controles_demo(estado: str) -> None:
             use_container_width=True,
             help="Marca el evento como resuelto",
         ):
-            try:
-                requests.get(
-                    "http://localhost:5000/trigger?estado=RESUELTO", timeout=2
-                )
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                requests.get("http://localhost:5000/trigger?estado=RESUELTO", timeout=2)
 
     with col_n:
         if st.button(
@@ -683,12 +675,8 @@ def render_controles_demo(estado: str) -> None:
             use_container_width=True,
             help="Regresa al monitoreo normal",
         ):
-            try:
-                requests.get(
-                    "http://localhost:5000/trigger?estado=NORMAL", timeout=2
-                )
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                requests.get("http://localhost:5000/trigger?estado=NORMAL", timeout=2)
 
     if st.button(
         "🔄 Reiniciar sistema (limpiar historial)",
@@ -696,13 +684,12 @@ def render_controles_demo(estado: str) -> None:
         use_container_width=True,
         help="Borra el historial, cancela todos los timers y vuelve a NORMAL.",
     ):
-        try:
+        with contextlib.suppress(Exception):
             requests.get("http://localhost:5000/reset", timeout=2)
-        except Exception:
-            pass
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────
+
 
 def render_footer(estado: str) -> None:
     """Footer dark-navy con version, timestamp y dot indicador."""

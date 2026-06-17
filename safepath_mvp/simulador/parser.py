@@ -1,17 +1,14 @@
 """Extraccion de datos de acelerometro y GPS desde payloads HTTP JSON.
 
-Soporta multiples formatos: Sensor Logger (Android/iOS), Phyphox, sensores nativos.
+Soporta el formato nativo de Phyphox (buffer HTTP) y formatos genericos alternativos.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 
-def buscar_aceleracion_en_dict(
-    d: dict, profundidad: int = 0
-) -> Optional[tuple[float, float, float]]:
+def buscar_aceleracion_en_dict(d: dict, profundidad: int = 0) -> tuple[float, float, float] | None:
     """Busca recursivamente campos de aceleracion en un diccionario anidado."""
     if profundidad > 5 or d is None:
         return None
@@ -34,7 +31,7 @@ def buscar_aceleracion_en_dict(
             except (ValueError, TypeError):
                 pass
 
-    for k, v in d.items():
+    for _k, v in d.items():
         if isinstance(v, dict):
             result = buscar_aceleracion_en_dict(v, profundidad + 1)
             if result:
@@ -45,7 +42,7 @@ def buscar_aceleracion_en_dict(
 
 def extraer_aceleracion(
     data: dict | list | None,
-) -> Optional[tuple[float, float, float]]:
+) -> tuple[float, float, float] | None:
     """Extrae (ax, ay, az) de cualquier estructura JSON anidada."""
     if data is None:
         return None
@@ -80,9 +77,7 @@ def extraer_aceleracion(
     return None
 
 
-def buscar_gps_en_dict(
-    d: dict, profundidad: int = 0
-) -> Optional[tuple[float, float]]:
+def buscar_gps_en_dict(d: dict, profundidad: int = 0) -> tuple[float, float] | None:
     """Busca recursivamente lat/lon en diccionario anidado."""
     if profundidad > 5 or d is None:
         return None
@@ -107,7 +102,7 @@ def buscar_gps_en_dict(
             except (ValueError, TypeError):
                 pass
 
-    for k, v in d.items():
+    for _k, v in d.items():
         if isinstance(v, dict):
             result = buscar_gps_en_dict(v, profundidad + 1)
             if result:
@@ -116,7 +111,7 @@ def buscar_gps_en_dict(
     return None
 
 
-def extraer_gps(data: dict | list | None) -> Optional[tuple[float, float]]:
+def extraer_gps(data: dict | list | None) -> tuple[float, float] | None:
     """Extrae (lat, lon) de cualquier estructura JSON anidada."""
     if data is None:
         return None
@@ -151,9 +146,52 @@ def extraer_gps(data: dict | list | None) -> Optional[tuple[float, float]]:
     return None
 
 
-def calcular_aceleracion_neta(
-    ax: float, ay: float, az: float, gravedad: float = 9.8
-) -> float:
+def extraer_aceleracion_phyphox(
+    data: dict | None,
+) -> tuple[float, float, float] | None:
+    """Extrae (ax, ay, az) del formato buffer de Phyphox.
+
+    Phyphox expone: {"buffer": {"accX": {"buffer": [...]}, "accY": ..., "accZ": ...}}
+    Se toma el ultimo valor de cada buffer (muestra mas reciente).
+    """
+    if not isinstance(data, dict):
+        return None
+    try:
+        buf = data.get("buffer", {})
+        ax_list = buf.get("accX", {}).get("buffer", [])
+        ay_list = buf.get("accY", {}).get("buffer", [])
+        az_list = buf.get("accZ", {}).get("buffer", [])
+        if ax_list and ay_list and az_list:
+            return float(ax_list[-1]), float(ay_list[-1]), float(az_list[-1])
+    except (KeyError, IndexError, TypeError, ValueError):
+        pass
+    return None
+
+
+def extraer_gps_phyphox(
+    data: dict | None,
+) -> tuple[float, float] | None:
+    """Extrae (lat, lon) del formato buffer de Phyphox GPS.
+
+    Phyphox expone: {"buffer": {"lat": {"buffer": [...]}, "lon": {"buffer": [...]}}}
+    """
+    if not isinstance(data, dict):
+        return None
+    try:
+        buf = data.get("buffer", {})
+        lat_list = buf.get("lat", {}).get("buffer", [])
+        lon_list = buf.get("lon", {}).get("buffer", [])
+        if lat_list and lon_list:
+            lat = float(lat_list[-1])
+            lon = float(lon_list[-1])
+            if -90 <= lat <= 90 and -180 <= lon <= 180 and not (lat == 0 and lon == 0):
+                return lat, lon
+    except (KeyError, IndexError, TypeError, ValueError):
+        pass
+    return None
+
+
+def calcular_aceleracion_neta(ax: float, ay: float, az: float, gravedad: float = 9.8) -> float:
     """RF-S02: Calcula magnitud neta = |sqrt(ax^2 + ay^2 + az^2) - gravedad|."""
-    magnitude = math.sqrt(ax ** 2 + ay ** 2 + az ** 2)
+    magnitude = math.sqrt(ax**2 + ay**2 + az**2)
     return abs(magnitude - gravedad)

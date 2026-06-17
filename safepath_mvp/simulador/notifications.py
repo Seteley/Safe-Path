@@ -5,9 +5,11 @@ La funcion se llama desde logic.py en un hilo daemon para no bloquear
 la maquina de estados.
 """
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
-from .settings import settings
+
 from ..shared.utils import setup_logging
+from .settings import settings
 
 logger = setup_logging("safepath.notifications")
 
@@ -43,12 +45,15 @@ def enviar_alerta_sms(estado: dict[str, Any]) -> bool:
     lat = estado.get("lat", "")
     lon = estado.get("lon", "")
     enlace_mapa = (
-        f"https://maps.google.com/?q={lat},{lon}"
-        if lat and lon
-        else "ubicacion no disponible"
+        f"https://maps.google.com/?q={lat},{lon}" if lat and lon else "ubicacion no disponible"
     )
     tipo_activacion = _determinar_tipo_activacion(estado)
-    hora = estado.get("timestamp_cambio", "")[:19].replace("T", " ")
+    _lima = timezone(timedelta(hours=-5))
+    _ts = estado.get("timestamp_cambio", "")
+    try:
+        hora = datetime.fromisoformat(_ts).astimezone(_lima).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        hora = _ts[:19].replace("T", " ")
 
     cuerpo = (
         f"[SAFE-PATH] ALERTA DE EMERGENCIA\n"

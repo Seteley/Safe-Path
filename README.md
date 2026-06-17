@@ -7,8 +7,9 @@ Sistema de seguridad preventiva para mujeres. Una pulsera inteligente (simulada 
 ## Arquitectura
 
 ```
-[ CELULAR (Sensor Logger) ]     HTTP POST cada 100ms     [ server.py (Flask)     ]
-[ acelerometro + GPS       ] --------------------------> [ puerto 5000           ]
+[ CELULAR (Phyphox)         ]                            [ server.py (Flask)     ]
+[ acelerometro + GPS        ]  <-- HTTP GET cada 100ms - [ phyphox_poller()      ]
+[ servidor HTTP en :8080    ]                            [ puerto 5000           ]
                                                           [ + logic.py            ]
                                                                   |
                                                           escritura atomica
@@ -20,7 +21,7 @@ Sistema de seguridad preventiva para mujeres. Una pulsera inteligente (simulada 
 ```
 
 - **Una sola laptop** ejecuta el servidor Flask y el dashboard Streamlit en paralelo
-- **El celular** con Sensor Logger transmite acelerometro y GPS por WiFi a la laptop
+- **El celular** con Phyphox expone un servidor HTTP local; la laptop lo consulta cada 100 ms
 - **`state.json`** es el archivo compartido que sincroniza ambos procesos -- se escribe atomicamente con `os.replace`
 - **`schema.py`** define el contrato del JSON para que simulador y dashboard trabajen sin romperse
 - Todo en **Python puro**, sin MQTT, sin broker externo, sin servidores en la nube
@@ -82,7 +83,7 @@ prueba safepath/
 | `settings.py` | Carga secrets desde `.env` (credenciales Twilio). Separado de `config.py` para no exponer secrets en imports. |
 | `logic.py` | Maquina de estados con 4 estados: `NORMAL`, `VERIFICANDO`, `ALERTA`, `RESUELTO`. Thread-safe con `threading.Lock`. Maneja temporizadores trackeados para countdown y auto-escalamiento. Guarda el estado en `state.json` con escritura atomica. Historial de ultimos 10 eventos con timestamps ISO 8601. |
 | `server.py` | Servidor HTTP Flask con 8 endpoints. Usa `parser.py` para extraer aceleracion y GPS de multiples formatos JSON. Logging estructurado para diagnostico en vivo. |
-| `parser.py` | Funciones de parsing flexibles que extraen aceleracion (`ax,ay,az`) y coordenadas GPS (`lat,lon`) de multiples formatos JSON -- compatible con Sensor Logger, Phyphox y sensores nativos. |
+| `parser.py` | Funciones de parsing que extraen aceleracion (`ax,ay,az`) y coordenadas GPS (`lat,lon`). Incluye `extraer_aceleracion_phyphox()` y `extraer_gps_phyphox()` para el formato buffer nativo de Phyphox, mas funciones genericas de fallback. |
 | `notifications.py` | Envia SMS al contacto de confianza via Twilio cuando el estado transiciona a ALERTA. El mensaje incluye nombre de usuaria, enlace de Google Maps, hora del evento y tipo de activacion. Usa `settings.py` para credenciales. |
 | `dashboard.py` | Orquestador Streamlit que lee `state.json` cada 1s y renderiza todos los componentes. Layout de 2 columnas estable en pantalla 15". |
 | `components.py` | Componentes visuales individuales: indicador de estado con color SafeCorp, barra de aceleracion, flujo DETECTAR->VERIFICAR->ESCALAR, countdown, mapa Folium, historial de eventos, y panel de control de demo (botones para forzar estados y reiniciar). El mapa se reconstruye solo al cambiar de estado o detectar >4m de movimiento real. |
@@ -121,7 +122,7 @@ Los estados tambien pueden forzarse manualmente con `/trigger?estado=X` y reinic
 
 | Metodo | Endpoint | Descripcion | Respuesta |
 |---|---|---|---|
-| `POST` | `/data` | Recibe datos del acelerometro y GPS desde Sensor Logger | `{"status": "ok", "accel": 0.23}` |
+| `POST` | `/data` | Fallback manual: recibe datos del acelerometro y GPS en JSON generico (sin Phyphox) | `{"status": "ok", "accel": 0.23}` |
 | `GET` | `/status` | Retorna el estado actual completo (contenido de state.json) | `{"estado": "NORMAL", ...}` |
 | `GET` / `POST` | `/cancel` | Cancela una verificacion activa: `VERIFICANDO -> NORMAL` | `{"status": "cancelado"}` |
 | `GET` | `/trigger?estado=X` | Fuerza cualquier estado (`NORMAL`, `VERIFICANDO`, `ALERTA`, `RESUELTO`). Usar para debug sin celular. | `{"status": "ok", "estado": "ALERTA"}` |
@@ -246,26 +247,26 @@ pre-commit install
 
 ---
 
-## Configuracion del celular (Sensor Logger)
+## Configuracion del celular (Phyphox)
 
-1. Instalar **Sensor Logger** desde Play Store (Android) o App Store (iOS) -- es gratuita
+1. Instalar **Phyphox** desde Play Store (Android) o App Store (iOS) -- es gratuita
 2. Conectar el celular a la **misma red WiFi** que la laptop
-3. En Sensor Logger, ir a **Settings -> Streaming**:
-   - Activar **HTTP Push**
-   - **URL:** `http://<IP_DE_LA_LAPTOP>:5000/data` (ej: `http://192.168.1.44:5000/data`)
-   - **Intervalo:** 100 ms
-   - Activar los sensores: **acelerometro** y **ubicacion/GPS**
-4. Para encontrar la IP de la laptop:
-   - Windows: abrir `cmd`, ejecutar `ipconfig`, buscar `Direccion IPv4`
-   - Mac/Linux: `ifconfig` o `ip a`
-5. Opcional: desactivar el resto de sensores para no saturar la red local
+3. Abrir Phyphox y seleccionar el experimento **"Accelerometer"** (o "Aceleracion")
+4. Activar el **acceso remoto**: menu (⋮) → **"Allow remote access"** → confirmar
+   - Phyphox mostrara una URL como `http://192.168.1.X:8080` -- esa es la IP del celular
+5. Copiar la **IP del celular** y pegarla en `safepath_mvp/simulador/config.py`:
+   ```python
+   PHYPHOX_IP: str = "192.168.1.X"  # reemplazar con la IP real
+   ```
+6. (Opcional) Para GPS: abrir el experimento **"GPS"** en Phyphox en una segunda instancia o usar una app complementaria. Si Phyphox no tiene GPS activo, el sistema usara la ubicacion de referencia configurada en `config.py`.
 
-El servidor Flask imprime la IP detectada y todos los endpoints al iniciar:
+Al iniciar el servidor, se mostrara la URL de Phyphox configurada:
 ```
 =======================================================
   SAFE-PATH SERVER (D1 - Simulador de Pulsera)
   IP detectada: 192.168.1.44
-  POST /data       <- Sensor Logger (acelerometro)
+  Phyphox -> http://192.168.1.X:8080 (polling 100 ms)
+  POST /data       <- Fallback manual (sin Phyphox)
   GET  /status     <- Estado completo
   GET  /cancel     <- Cancelar verificacion
   GET  /trigger?estado=X  <- Forzar estado (Plan B)

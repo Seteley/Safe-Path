@@ -198,23 +198,49 @@ def ping() -> tuple:
 
 @app.route("/phyphox-debug", methods=["GET"])
 def phyphox_debug() -> tuple:
-    """Diagnostico de conexion con Phyphox: prueba en vivo y muestra la respuesta cruda."""
+    """Diagnostico completo de Phyphox: aceleracion y GPS."""
     base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
     result: dict = {
         "config": {"ip": PHYPHOX_IP, "port": PHYPHOX_PORT, "url": base},
         "last_error": _phyphox_last_error,
-        "last_raw_response": _phyphox_last_raw,
+        "estado_actual": machine.get_state(),
     }
+
+    # Aceleracion
     try:
-        resp = http_client.get(f"{base}/get?accX=full&accY=full&accZ=full", timeout=2)
-        raw = resp.json()
-        result["live_response"] = raw
-        result["buffers_encontrados"] = list(raw.get("buffer", {}).keys())
-        result["aceleracion_parseada"] = extraer_aceleracion_phyphox(raw)
-        result["status"] = "ok"
+        raw = http_client.get(f"{base}/get?accX=full&accY=full&accZ=full", timeout=2).json()
+        result["aceleracion"] = {
+            "status": "ok",
+            "buffers": list(raw.get("buffer", {}).keys()),
+            "parseada": extraer_aceleracion_phyphox(raw),
+        }
     except Exception as exc:
-        result["status"] = "error"
-        result["live_error"] = str(exc)
+        result["aceleracion"] = {"status": "error", "error": str(exc)}
+
+    # GPS — intenta los nombres de buffer mas comunes de Phyphox
+    gps_candidates = [
+        "lat=full&lon=full",
+        "latitude=full&longitude=full",
+        "gpsLat=full&gpsLon=full",
+    ]
+    for params in gps_candidates:
+        try:
+            raw_gps = http_client.get(f"{base}/get?{params}", timeout=2).json()
+            buffers = list(raw_gps.get("buffer", {}).keys())
+            parsed = extraer_gps_phyphox(raw_gps)
+            result["gps"] = {
+                "status": "ok",
+                "params_usados": params,
+                "buffers": buffers,
+                "parseada": parsed,
+                "maquina_lat": machine.lat,
+                "maquina_lon": machine.lon,
+            }
+            if parsed:
+                break
+        except Exception as exc:
+            result["gps"] = {"status": "error", "error": str(exc)}
+
     return jsonify(result)
 
 

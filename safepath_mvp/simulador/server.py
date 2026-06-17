@@ -244,6 +244,17 @@ def phyphox_debug() -> tuple:
     return jsonify(result)
 
 
+@app.route("/phyphox-config", methods=["GET"])
+def phyphox_config() -> tuple:
+    """Devuelve el XML de configuracion del experimento activo en Phyphox."""
+    base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
+    try:
+        resp = http_client.get(f"{base}/config", timeout=3)
+        return resp.text, 200, {"Content-Type": "application/xml; charset=utf-8"}
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
 @app.route("/mobile", methods=["GET"])
 def mobile_view() -> tuple:
     """Vista móvil minimalista para control desde teléfono."""

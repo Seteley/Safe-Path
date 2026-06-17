@@ -31,32 +31,50 @@ machine = StateMachine()
 # ── Endpoints principales (spec D1) ──────────────────────────────
 
 
+_phyphox_last_error: str = ""
+_phyphox_last_raw: dict = {}
+
+
 def phyphox_poller() -> None:
     """Hilo daemon que consulta Phyphox cada PHYPHOX_POLL_INTERVAL segundos."""
+    global _phyphox_last_error, _phyphox_last_raw
     base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
     url_accel = f"{base}/get?accX=full&accY=full&accZ=full"
     url_gps = f"{base}/get?lat=full&lon=full"
     logger.info("Phyphox poller iniciado → %s", base)
+    _consecutive_errors = 0
 
     while True:
         try:
             resp = http_client.get(url_accel, timeout=0.5)
-            resultado = extraer_aceleracion_phyphox(resp.json())
+            raw = resp.json()
+            _phyphox_last_raw = raw
+            _phyphox_last_error = ""
+            _consecutive_errors = 0
+            resultado = extraer_aceleracion_phyphox(raw)
             if resultado:
                 ax, ay, az = resultado
                 net = calcular_aceleracion_neta(ax, ay, az, GRAVEDAD)
                 machine.update(net)
                 logger.debug("Phyphox accel ax=%.2f ay=%.2f az=%.2f net=%.2f", ax, ay, az, net)
+            else:
+                logger.warning(
+                    "Phyphox conectado pero sin datos de aceleracion. Buffers recibidos: %s",
+                    list(raw.get("buffer", {}).keys()),
+                )
         except Exception as exc:
-            logger.debug("Phyphox accel no disponible: %s", exc)
+            _consecutive_errors += 1
+            _phyphox_last_error = str(exc)
+            if _consecutive_errors == 1 or _consecutive_errors % 50 == 0:
+                logger.warning("Phyphox no disponible (%s intentos): %s", _consecutive_errors, exc)
 
         try:
             resp_gps = http_client.get(url_gps, timeout=0.5)
             gps = extraer_gps_phyphox(resp_gps.json())
             if gps:
                 machine.update_location(*gps)
-        except Exception as exc:
-            logger.debug("Phyphox GPS no disponible: %s", exc)
+        except Exception:
+            pass
 
         time.sleep(PHYPHOX_POLL_INTERVAL)
 
@@ -171,6 +189,28 @@ def get_state() -> tuple:
 @app.route("/ping", methods=["GET"])
 def ping() -> tuple:
     return jsonify({"status": "alive", "state": machine.state})
+
+
+@app.route("/phyphox-debug", methods=["GET"])
+def phyphox_debug() -> tuple:
+    """Diagnostico de conexion con Phyphox: prueba en vivo y muestra la respuesta cruda."""
+    base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
+    result: dict = {
+        "config": {"ip": PHYPHOX_IP, "port": PHYPHOX_PORT, "url": base},
+        "last_error": _phyphox_last_error,
+        "last_raw_response": _phyphox_last_raw,
+    }
+    try:
+        resp = http_client.get(f"{base}/get?accX=full&accY=full&accZ=full", timeout=2)
+        raw = resp.json()
+        result["live_response"] = raw
+        result["buffers_encontrados"] = list(raw.get("buffer", {}).keys())
+        result["aceleracion_parseada"] = extraer_aceleracion_phyphox(raw)
+        result["status"] = "ok"
+    except Exception as exc:
+        result["status"] = "error"
+        result["live_error"] = str(exc)
+    return jsonify(result)
 
 
 @app.route("/mobile", methods=["GET"])

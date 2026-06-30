@@ -57,7 +57,9 @@ prueba safepath/
     │   ├── server.py          Servidor Flask con endpoints REST
     │   ├── parser.py          Extraccion de acelerometro/GPS desde payloads HTTP
     │   ├── logic.py           Maquina de estados con timers thread-safe
-    │   └── notifications.py   Envio de SMS al contacto de confianza (Twilio)
+    │   ├── notifications.py   Envio de SMS al contacto de confianza (Twilio)
+    │   ├── mobile_html.py     Vista HTML minimalista para control desde el movil
+    │   └── tunnel.py          Tunel ngrok + QR en terminal al arrancar el servidor
     │
     ├── dashboard/
     │   ├── __init__.py
@@ -89,6 +91,8 @@ prueba safepath/
 | `components.py` | Componentes visuales individuales: indicador de estado con color SafeCorp, barra de aceleracion, flujo DETECTAR->VERIFICAR->ESCALAR, countdown, mapa Folium, historial de eventos, y panel de control de demo (botones para forzar estados y reiniciar). El mapa se reconstruye solo al cambiar de estado o detectar >4m de movimiento real. |
 | `schema.py` | Define el contrato explicito del `state.json`: nombres de campos, tipos, valores por defecto, estados validos, paleta de colores. Ambos modulos importan desde aqui. |
 | `utils.py` | Utilidades compartidas: configuracion de logging, deteccion de IP local, escritura atomica de JSON con archivo temporal + `os.replace`. |
+| `mobile_html.py` | HTML minimalista responsive para controlar el sistema desde el celular sin necesidad de abrir el dashboard Streamlit. Hace polling al endpoint `/status` cada 1 segundo y muestra boton "Forzar alerta" (en NORMAL) o "Cancelar alerta" (en VERIFICANDO). Accesible via `GET /mobile`. |
+| `tunnel.py` | Al arrancar el servidor, abre un tunel ngrok al puerto 5000, imprime un QR escaneable en la terminal con la URL `/mobile` y copia la URL al portapapeles. Si ngrok no esta disponible hace fallback a la IP local. |
 
 ---
 
@@ -130,6 +134,9 @@ Los estados tambien pueden forzarse manualmente con `/trigger?estado=X` y reinic
 | `GET` | `/ping` | Health check simple -- verifica que el servidor esta vivo | `{"status": "alive", "state": "NORMAL"}` |
 | `POST` | `/sensor` | **Alias** de `/data` -- compatibilidad con versiones anteriores | Igual que `/data` |
 | `GET` | `/state` | **Alias** de `/status` -- compatibilidad con versiones anteriores | Igual que `/status` |
+| `GET` | `/mobile` | Vista HTML minimalista para controlar el sistema desde el movil (sin Streamlit). Generada por `mobile_html.py`. | HTML |
+| `GET` | `/phyphox-debug` | Diagnostico completo de la conexion Phyphox: aceleracion parseada, GPS y ultimo error registrado. Util cuando Phyphox no conecta. | `{"config": {...}, "aceleracion": {...}, "gps": {...}}` |
+| `GET` | `/phyphox-config` | Devuelve el XML de configuracion del experimento activo en Phyphox (obtenido de `<IP>:8080/config`). | `text/plain` XML |
 
 ---
 
@@ -178,11 +185,27 @@ Los estados tambien pueden forzarse manualmente con `/trigger?estado=X` y reinic
 
 ---
 
+## Vista movil
+
+Al iniciar el servidor (`python -m safepath_mvp.simulador.server`), `tunnel.py` abre automaticamente un tunel ngrok y genera un QR escaneable en la terminal apuntando a `<url>/mobile`.
+
+Escanear el QR desde cualquier celular en la misma red (o con tunel activo) abre una interfaz minimalista que permite:
+
+- Ver el estado actual del sistema en tiempo real (polling cada 1 s)
+- Forzar alerta con un toque (en estado NORMAL)
+- Cancelar alerta activa con un toque (en estado VERIFICANDO)
+
+Si ngrok no esta disponible, se muestra la URL local (`http://<IP>:5000/mobile`) en su lugar.
+
+> **Nota:** Esta vista es para el operador o demostrador. La usuaria no la usa directamente; el celular actua como sensor vía Phyphox.
+
+---
+
 ## Optimizacion del mapa (sin parpadeo)
 
 El dashboard implementa 3 mecanismos para que el mapa Folium no parpadee:
 
-1. **Pre-renderizado HTML** -- El mapa Folium se convierte a string HTML una sola vez y se guarda en `st.session_state`. Se usa `st.components.v1.html()` en lugar de `st_folium()`. Al ser un string identico entre ciclos, el navegador no recarga el iframe.
+1. **Pre-renderizado HTML** -- El mapa Folium se convierte a string HTML una sola vez y se guarda en `st.session_state`. Se sirve con `st.iframe()` en lugar de `st_folium()`. Al ser un string identico entre ciclos, el navegador no recarga el iframe.
 
 2. **Umbral de movimiento GPS** -- `UMBRAL_MOVIMIENTO_GPS = 0.00004` (~4 metros). El ruido del GPS (fluctuaciones de 0.000006 grados) se ignora. Solo se reconstruye el mapa cuando la persona realmente camina >4m.
 
@@ -195,18 +218,20 @@ El dashboard implementa 3 mecanismos para que el mapa Folium no parpadee:
 ## Requisitos
 
 - **Python 3.9+**
-- **Celular** con iOS o Android y la app gratuita **Sensor Logger**
+- **Celular** con iOS o Android y la app gratuita **Phyphox**
 - **Misma red WiFi** entre la laptop y el celular (o hotspot del celular hacia la laptop)
 
 ### Dependencias Python
 
 ```
-flask>=2.0           Servidor HTTP local
-streamlit>=1.30      Dashboard interactivo
-folium>=0.14         Mapa interactivo (renderizado de HTML)
-requests>=2.25       Cliente HTTP (para botones del dashboard)
-python-dotenv>=1.0   Carga variables de entorno desde archivo .env
-twilio>=8.0          Envio de SMS al contacto de confianza
+flask>=2.0              Servidor HTTP local
+streamlit>=1.30         Dashboard interactivo
+folium>=0.14            Mapa interactivo (renderizado de HTML)
+requests>=2.25          Cliente HTTP (para botones del dashboard)
+python-dotenv>=1.0      Carga variables de entorno desde archivo .env
+twilio>=8.0             Envio de SMS al contacto de confianza
+pyngrok>=7.0            Tunel ngrok para exponer el servidor publicamente (vista movil)
+qrcode[terminal]>=8.0   Genera QR escaneable en la terminal con la URL /mobile
 ```
 
 **Dependencias de desarrollo:**
@@ -274,6 +299,7 @@ Al iniciar el servidor, se mostrara la URL de Phyphox configurada:
   GET  /trigger?estado=X  <- Forzar estado (Plan B)
   GET  /reset      <- Reiniciar para nueva demo
   GET  /ping       <- Health check
+  GET  /mobile     <- Vista movil (telefono)
 =======================================================
 ```
 

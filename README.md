@@ -281,10 +281,11 @@ pre-commit install
    - GPS: `locLat`, `locLon`
 4. Activar el **acceso remoto**: menu (⋮) → **"Allow remote access"** → confirmar
    - Phyphox mostrara una URL como `http://192.168.1.X:8080` -- esa es la IP del celular
-5. Copiar la **IP del celular** y pegarla en `safepath_mvp/simulador/config.py`:
-   ```python
-   PHYPHOX_IP: str = "192.168.1.X"  # reemplazar con la IP real
+5. Copiar la **IP del celular** y pegarla en `safepath_mvp/.env` (copiar primero desde `.env.example` si no existe):
    ```
+   PHYPHOX_IP=192.168.1.X
+   ```
+   Esta variable vive en `.env` (no en `config.py`) porque cambia con cada red WiFi y con cada persona -- `.env` esta en `.gitignore` y nunca se sube a git, asi cada quien usa su propia IP sin pisar la del resto del equipo.
 6. Presionar **Play** en Phyphox para iniciar la medicion -- el servidor empieza a recibir datos automaticamente cada 100 ms
 
 Al iniciar el servidor, se mostrara la URL de Phyphox configurada:

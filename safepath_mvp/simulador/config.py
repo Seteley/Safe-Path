@@ -17,6 +17,6 @@ SMTP_SERVER: str = "smtp.gmail.com"
 SMTP_PORT: int = 465
 
 # Phyphox (fuente de datos del acelerometro y GPS)
-PHYPHOX_IP: str = "192.168.1.36"  # IP del celular con Phyphox activo
+# PHYPHOX_IP vive en settings.py / .env porque cambia segun la red de cada persona
 PHYPHOX_PORT: int = 8080
 PHYPHOX_POLL_INTERVAL: float = 0.1  # segundos entre consultas (100 ms)

@@ -12,7 +12,7 @@ from flask import Flask, jsonify, request
 
 from ..shared.schema import ESTADOS_VALIDOS
 from ..shared.utils import get_local_ip, setup_logging
-from .config import GRAVEDAD, HOST, PHYPHOX_IP, PHYPHOX_POLL_INTERVAL, PHYPHOX_PORT, PORT
+from .config import GRAVEDAD, HOST, PHYPHOX_POLL_INTERVAL, PHYPHOX_PORT, PORT
 from .logic import StateMachine
 from .parser import (
     calcular_aceleracion_neta,
@@ -21,6 +21,7 @@ from .parser import (
     extraer_gps,
     extraer_gps_phyphox,
 )
+from .settings import settings
 
 logger = setup_logging("safepath.server")
 
@@ -38,7 +39,7 @@ _phyphox_last_raw: dict = {}
 def phyphox_poller() -> None:
     """Hilo daemon que consulta Phyphox cada PHYPHOX_POLL_INTERVAL segundos."""
     global _phyphox_last_error, _phyphox_last_raw
-    base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
+    base = f"http://{settings.PHYPHOX_IP}:{PHYPHOX_PORT}"
     url_accel = f"{base}/get?accX=full&accY=full&accZ=full"
     url_gps = f"{base}/get?locLat=full&locLon=full"
     logger.info("Phyphox poller iniciado → %s", base)
@@ -199,9 +200,9 @@ def ping() -> tuple:
 @app.route("/phyphox-debug", methods=["GET"])
 def phyphox_debug() -> tuple:
     """Diagnostico completo de Phyphox: aceleracion y GPS."""
-    base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
+    base = f"http://{settings.PHYPHOX_IP}:{PHYPHOX_PORT}"
     result: dict = {
-        "config": {"ip": PHYPHOX_IP, "port": PHYPHOX_PORT, "url": base},
+        "config": {"ip": settings.PHYPHOX_IP, "port": PHYPHOX_PORT, "url": base},
         "last_error": _phyphox_last_error,
         "estado_actual": machine.get_state(),
     }
@@ -247,7 +248,7 @@ def phyphox_debug() -> tuple:
 @app.route("/phyphox-config", methods=["GET"])
 def phyphox_config() -> tuple:
     """Devuelve el XML de configuracion del experimento activo en Phyphox."""
-    base = f"http://{PHYPHOX_IP}:{PHYPHOX_PORT}"
+    base = f"http://{settings.PHYPHOX_IP}:{PHYPHOX_PORT}"
     try:
         resp = http_client.get(f"{base}/config", timeout=3)
         return resp.text, 200, {"Content-Type": "text/plain; charset=utf-8"}
@@ -273,7 +274,7 @@ if __name__ == "__main__":
     print("  SAFE-PATH SERVER (D1 - Simulador de Pulsera)")
     print(f"  IP detectada: {local_ip}")
     print(
-        f"  Phyphox → http://{PHYPHOX_IP}:{PHYPHOX_PORT} (polling {int(PHYPHOX_POLL_INTERVAL * 1000)} ms)"
+        f"  Phyphox → http://{settings.PHYPHOX_IP}:{PHYPHOX_PORT} (polling {int(PHYPHOX_POLL_INTERVAL * 1000)} ms)"
     )
     print("  POST /data       <- Fallback manual (sin Phyphox)")
     print("  GET  /status     <- Estado completo")

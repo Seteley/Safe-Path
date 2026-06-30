@@ -82,7 +82,7 @@ prueba safepath/
 | Archivo | Proposito |
 |---------|-----------|
 | `config.py` | Contiene todas las constantes del sistema: umbral de aceleracion (15 m/s2), umbral de movimiento GPS (~4m), duracion de la verificacion (10s), duracion de la alerta (30s), host, puerto, datos de la usuaria de prueba y ubicacion de referencia. Cambiar cualquier valor aqui afecta a todo el sistema. |
-| `settings.py` | Carga secrets desde `.env` (credenciales Twilio). Separado de `config.py` para no exponer secrets en imports. |
+| `settings.py` | Carga configuracion sensible o dependiente del entorno desde `.env` (credenciales Twilio y `PHYPHOX_IP`). Separado de `config.py` para no exponer secrets en imports ni subir valores especificos de cada maquina a git. |
 | `logic.py` | Maquina de estados con 4 estados: `NORMAL`, `VERIFICANDO`, `ALERTA`, `RESUELTO`. Thread-safe con `threading.Lock`. Maneja temporizadores trackeados para countdown y auto-escalamiento. Guarda el estado en `state.json` con escritura atomica. Historial de ultimos 10 eventos con timestamps ISO 8601. |
 | `server.py` | Servidor HTTP Flask con 8 endpoints. Usa `parser.py` para extraer aceleracion y GPS de multiples formatos JSON. Logging estructurado para diagnostico en vivo. |
 | `parser.py` | Funciones de parsing que extraen aceleracion (`ax,ay,az`) y coordenadas GPS (`lat,lon`). Incluye `extraer_aceleracion_phyphox()` y `extraer_gps_phyphox()` para el formato buffer nativo de Phyphox, mas funciones genericas de fallback. |
@@ -383,7 +383,7 @@ curl http://localhost:5000/reset
 
 ## Parametros configurables
 
-Todos en `simulador/config.py`:
+En `simulador/config.py` (valores fijos del sistema, se suben a git):
 
 ```python
 UMBRAL_ACELERACION = 15.0    # m/s2 -- aceleracion neta que dispara la deteccion
@@ -399,10 +399,19 @@ UBICACION_LAT = -12.0833     # latitud de referencia (Jesus Maria, Lima)
 UBICACION_LON = -77.0500     # longitud de referencia
 DIRECCION = "Av. La Marina 1200, Jesus Maria"  # direccion de referencia
 UMBRAL_MOVIMIENTO_GPS = 0.00004  # grados (~4m) para ignorar ruido del sensor GPS
+PHYPHOX_PORT = 8080           # puerto HTTP del servidor remoto de Phyphox
+PHYPHOX_POLL_INTERVAL = 0.1   # segundos entre consultas a Phyphox (100 ms)
+```
+
+En `safepath_mvp/.env` (especifico de cada maquina/red, **no** se sube a git):
+
+```
+PHYPHOX_IP=192.168.1.X   # IP del celular con Phyphox, cambia por persona/red
 ```
 
 - **`UMBRAL_ACELERACION` (15 m/s2):** Caminar normal (2-4 m/s2) no activa. Una sacudida intencional (20-30 m/s2) si.
 - **`UMBRAL_MOVIMIENTO_GPS` (0.00004 grados ~4m):** Ignora el ruido del GPS del celular. Solo reconstruye el mapa cuando la persona realmente se movio.
+- **`PHYPHOX_IP`:** Vive en `.env` y no en `config.py` porque cada persona tiene su celular en una IP distinta -- evita pisar el valor de otros al hacer commit.
 
 ---
 

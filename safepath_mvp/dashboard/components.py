@@ -363,7 +363,7 @@ def render_countdown(data: dict[str, Any]) -> None:
     )
     if st.button("✅ CANCELAR ALERTA", type="secondary"):
         with contextlib.suppress(Exception):
-            requests.get("http://localhost:5000/cancel", timeout=2)
+            requests.get("http://127.0.0.1:5000/cancel", timeout=2)
 
 
 # ── Contactos de emergencia ───────────────────────────────────────────────────
@@ -646,7 +646,7 @@ def render_controles_demo(estado: str) -> None:
             help="Simula detección de movimiento anómalo e inicia el countdown",
         ):
             with contextlib.suppress(Exception):
-                requests.get("http://localhost:5000/trigger?estado=VERIFICANDO", timeout=2)
+                requests.get("http://127.0.0.1:5000/trigger?estado=VERIFICANDO", timeout=2)
 
     with col_a:
         if st.button(
@@ -656,7 +656,7 @@ def render_controles_demo(estado: str) -> None:
             help="Escala directamente a estado de alerta y notifica al contacto",
         ):
             with contextlib.suppress(Exception):
-                requests.get("http://localhost:5000/trigger?estado=ALERTA", timeout=2)
+                requests.get("http://127.0.0.1:5000/trigger?estado=ALERTA", timeout=2)
 
     with col_r:
         if st.button(
@@ -666,7 +666,7 @@ def render_controles_demo(estado: str) -> None:
             help="Marca el evento como resuelto",
         ):
             with contextlib.suppress(Exception):
-                requests.get("http://localhost:5000/trigger?estado=RESUELTO", timeout=2)
+                requests.get("http://127.0.0.1:5000/trigger?estado=RESUELTO", timeout=2)
 
     with col_n:
         if st.button(
@@ -676,7 +676,7 @@ def render_controles_demo(estado: str) -> None:
             help="Regresa al monitoreo normal",
         ):
             with contextlib.suppress(Exception):
-                requests.get("http://localhost:5000/trigger?estado=NORMAL", timeout=2)
+                requests.get("http://127.0.0.1:5000/trigger?estado=NORMAL", timeout=2)
 
     if st.button(
         "🔄 Reiniciar sistema (limpiar historial)",
@@ -685,7 +685,7 @@ def render_controles_demo(estado: str) -> None:
         help="Borra el historial, cancela todos los timers y vuelve a NORMAL.",
     ):
         with contextlib.suppress(Exception):
-            requests.get("http://localhost:5000/reset", timeout=2)
+            requests.get("http://127.0.0.1:5000/reset", timeout=2)
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────

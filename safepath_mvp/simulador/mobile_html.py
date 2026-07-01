@@ -76,6 +76,7 @@ MOBILE_HTML = """<!DOCTYPE html>
         btn.disabled = true;
         btn.style.opacity = '0.6';
         try { await action(); } catch (_) {}
+        await refresh();
         setTimeout(() => { btn.disabled = false; btn.style.opacity = ''; }, 800);
       });
       content.appendChild(btn);

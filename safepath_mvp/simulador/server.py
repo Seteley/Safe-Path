@@ -147,7 +147,9 @@ def receive_data() -> tuple:
 @app.route("/status", methods=["GET"])
 def get_status() -> tuple:
     """RF-S11: Retorna el estado actual completo."""
-    return jsonify(machine.get_state())
+    response = jsonify(machine.get_state())
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/cancel", methods=["GET", "POST"])

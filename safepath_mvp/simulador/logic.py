@@ -6,16 +6,26 @@ con timers thread-safe y escritura atomica a state.json.
 
 from __future__ import annotations
 
-import json
-import time
-import threading
+import contextlib
 import os
+import threading
+import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
-from .config import *
 from ..shared.schema import ESTADOS_VALIDOS
 from ..shared.utils import atomic_write_json, setup_logging
+from .config import (
+    CONTACTO,
+    DIRECCION,
+    DURACION_ALERTA,
+    DURACION_RESUELTO,
+    TIEMPO_VERIFICACION,
+    UBICACION_LAT,
+    UBICACION_LON,
+    UMBRAL_ACELERACION,
+    USUARIA,
+)
 
 logger = setup_logging("safepath.statemachine")
 
@@ -37,15 +47,15 @@ class StateMachine:
         self.state: str = "NORMAL"
         self.accel_actual: float = 0.0
         self.countdown: int = 0
-        self.evento_inicio: Optional[float] = None
+        self.evento_inicio: float | None = None
         self.historial: list[dict[str, Any]] = []
-        self.timer: Optional[threading.Timer] = None
+        self.timer: threading.Timer | None = None
         self._timers: list[threading.Timer] = []
         self.lat: float = UBICACION_LAT
         self.lon: float = UBICACION_LON
         self.gps_activo: bool = False
         self.timestamp_cambio: str = ahora()
-        self.timestamp_inicio_verificando: Optional[str] = None
+        self.timestamp_inicio_verificando: str | None = None
         self._save()
 
     # ── Metodos publicos (thread-safe) ────────────────────────────
@@ -93,9 +103,7 @@ class StateMachine:
                 self.timer = threading.Timer(TIEMPO_VERIFICACION, self._escalar)
                 self._timers.append(self.timer)
                 self.timer.start()
-                threading.Thread(
-                    target=self._update_countdown, daemon=True
-                ).start()
+                threading.Thread(target=self._update_countdown, daemon=True).start()
             else:
                 self.countdown = 0
                 self.timestamp_inicio_verificando = None
@@ -148,10 +156,8 @@ class StateMachine:
     def _cancelar_todos_los_timers(self) -> None:
         """Cancela y limpia todos los timers activos. PRE: lock adquirido."""
         for t in self._timers:
-            try:
+            with contextlib.suppress(Exception):
                 t.cancel()
-            except Exception:
-                pass
         self._timers.clear()
         self.timer = None
 
@@ -169,9 +175,7 @@ class StateMachine:
             self.timer = threading.Timer(TIEMPO_VERIFICACION, self._escalar)
             self._timers.append(self.timer)
             self.timer.start()
-            threading.Thread(
-                target=self._update_countdown, daemon=True
-            ).start()
+            threading.Thread(target=self._update_countdown, daemon=True).start()
         elif new_state == "NORMAL":
             self.countdown = 0
             self.timestamp_inicio_verificando = None
@@ -179,10 +183,11 @@ class StateMachine:
     def _update_countdown(self) -> None:
         """Actualiza countdown cada segundo hasta salir de VERIFICANDO."""
         for i in range(TIEMPO_VERIFICACION, 0, -1):
-            if self.state != "VERIFICANDO":
-                break
-            self.countdown = i
-            self._save()
+            with self._lock:
+                if self.state != "VERIFICANDO":
+                    break
+                self.countdown = i
+                self._save()
             time.sleep(1)
 
     def _escalar(self) -> None:
@@ -198,9 +203,7 @@ class StateMachine:
                 self._notificar_alerta()
                 self._start_timer(DURACION_ALERTA, self._resolver)
         except Exception:
-            logger.exception(
-                "CRITICO: _escalar() fallo - estado actual=%s", self.state
-            )
+            logger.exception("CRITICO: _escalar() fallo - estado actual=%s", self.state)
 
     def _resolver(self) -> None:
         """RF-S07: Callback - transita ALERTA -> RESUELTO."""
@@ -214,9 +217,7 @@ class StateMachine:
                 self._save()
                 self._start_timer(DURACION_RESUELTO, self._volver_normal)
         except Exception:
-            logger.exception(
-                "CRITICO: _resolver() fallo - estado actual=%s", self.state
-            )
+            logger.exception("CRITICO: _resolver() fallo - estado actual=%s", self.state)
 
     def _volver_normal(self) -> None:
         """RF-S08: Callback - transita RESUELTO -> NORMAL."""
@@ -228,9 +229,7 @@ class StateMachine:
                 self.timestamp_inicio_verificando = None
                 self._save()
         except Exception:
-            logger.exception(
-                "CRITICO: _volver_normal() fallo - forzando NORMAL"
-            )
+            logger.exception("CRITICO: _volver_normal() fallo - forzando NORMAL")
             with self._lock:
                 self.state = "NORMAL"
                 self.countdown = 0
@@ -280,6 +279,4 @@ class StateMachine:
                 daemon=True,
             ).start()
         except ImportError:
-            logger.warning(
-                "Modulo notifications.py no encontrado - notificacion omitida"
-            )
+            logger.warning("Modulo notifications.py no encontrado - notificacion omitida")
